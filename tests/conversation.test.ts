@@ -9,6 +9,8 @@ function harness(overrides: Partial<StartOptions> = {}) {
   let input!: AsyncIterable<SDKUserMessage>
   let closed = false
   let interrupted = false
+  let model = ''
+  let settings: unknown
   const output = new AsyncQueue<SDKMessage>()
   const createQuery = ((args: Parameters<typeof query>[0]) => {
     options = args.options!
@@ -17,10 +19,13 @@ function harness(overrides: Partial<StartOptions> = {}) {
       [Symbol.asyncIterator]() { return this },
       close() { closed = true; output.close() },
       async interrupt() { interrupted = true },
+      async initializationResult() { return { commands: [{ name: 'compact', description: 'Compact context', argumentHint: '[instructions]' }], models: [{ value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet', description: 'Sonnet 5 · Fast' }] } },
+      async setModel(value: string) { model = value },
+      async applyFlagSettings(value: unknown) { settings = value },
     }) as unknown as Query
   }) as typeof query
   const chat = new Conversation({ parentSessionId: 'parent', resumeSessionAt: 'tip', cwd: '/project', model: 'same-as-parent', ...overrides }, createQuery)
-  return { chat, options, input, output, closed: () => closed, interrupted: () => interrupted }
+  return { chat, options, input, output, closed: () => closed, interrupted: () => interrupted, model: () => model, settings: () => settings }
 }
 const event = (value: unknown) => value as SDKMessage
 
@@ -119,4 +124,42 @@ test('an intentional stop is shown as stopped, and a follow-up clears the notice
   chat.send('Next question')
   expect(chat.state.notice).toBeUndefined()
   chat.close()
+})
+
+test('first slash command reaches the dispatcher unchanged, then normal text gets the side instruction', async () => {
+  const h = harness(), input = h.input[Symbol.asyncIterator]()
+  await h.chat.submit('/compact keep the deployment plan')
+  expect((await input.next()).value.message.content).toBe('/compact keep the deployment plan')
+  h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  h.chat.send('What is the plan?')
+  expect((await input.next()).value.message.content).toContain('separate side chat')
+  h.chat.close()
+})
+
+test('model and effort controls update only this process; unknown commands never become model requests', async () => {
+  const h = harness()
+  await h.chat.submit('/model sonnet')
+  expect(h.model()).toBe('sonnet')
+  expect(h.chat.state.model).toBe('claude-sonnet-5')
+  await h.chat.submit('/effort low')
+  expect(h.settings()).toEqual({ effortLevel: 'low' })
+  expect(h.chat.state.effort).toBe('low')
+  await expect(h.chat.submit('/not-a-command')).rejects.toThrow('Unknown side command')
+  expect(h.chat.state.messages).toHaveLength(0)
+  expect(h.chat.state.requests).toHaveLength(0)
+  h.chat.close()
+})
+
+test('local command output is visible without counting as a model request, and clear resets the side history', async () => {
+  const h = harness()
+  h.chat.accept(event({ type: 'assistant', message: { id: 'command', model: '<synthetic>', usage: {}, content: [{ type: 'text', text: 'Current model: Sonnet' }] } }))
+  expect(h.chat.state.messages[0].text).toBe('Current model: Sonnet')
+  expect(h.chat.state.requests).toHaveLength(0)
+  h.chat.accept(event({ type: 'conversation_reset', new_conversation_id: 'fresh' }))
+  expect(h.chat.state.messages).toHaveLength(0)
+  expect(h.chat.state.sessionId).toBe('fresh')
+  const first = h.input[Symbol.asyncIterator]()
+  h.chat.send('New question')
+  expect((await first.next()).value.message.content).toContain('separate side chat')
+  h.chat.close()
 })

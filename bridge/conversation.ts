@@ -1,6 +1,7 @@
 import { query, type PermissionResult, type SDKMessage, type SDKUserMessage, type Query } from '@anthropic-ai/claude-agent-sdk'
 import type { ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
+import { commandCatalog, modelLabel, parseCommand } from '../shared/commands.ts'
 
 export class Conversation {
   readonly state: ChatState = { revision: 0, status: 'starting', messages: [], permissions: [], requests: [], textDeltas: 0 }
@@ -14,9 +15,14 @@ export class Conversation {
   private closed = false
   private ended = false
   private stopping = false
+  private initializing: Promise<void>
+  private controlling = false
 
   constructor(options: StartOptions, createQuery: typeof query = query) {
     this.state.context = options.resumeSessionAt ? 'inherited' : 'empty'
+    this.state.model = options.model
+    this.state.cwd = options.cwd
+    if (options.isolatedTest) this.state.effort = 'low'
     const env: Record<string, string | undefined> = { ...process.env, CC_SIDE_WORKER: '1', CLAUDE_CODE_SKIP_PROMPT_HISTORY: '1' }
     delete env.CLAUDECODE
     delete env.CC_SIDE_TRACE
@@ -57,18 +63,75 @@ export class Conversation {
         },
       },
     })
+    this.initializing = this.initialize()
     void this.consume()
   }
+  private async initialize() {
+    try {
+      const initialized = await this.run.initializationResult()
+      if (this.closed) return
+      this.state.commands = commandCatalog(initialized.commands)
+      this.state.models = initialized.models
+      if (this.state.status === 'starting') this.state.status = 'ready'
+      this.changed()
+    } catch (error) {
+      if (!this.closed) { this.state.status = 'error'; this.state.error = String(error); this.changed() }
+    }
+  }
   private changed() { this.state.revision++ }
-  send(text: string) {
+  async submit(text: string) {
+    const command = parseCommand(text)
+    if (!command) { this.send(text); return }
+    await this.initializing
+    if (command.name === 'stop') { await this.stop(); return }
+    this.assertIdle()
+    const available = this.state.commands?.find(c => c.name === command.name || c.aliases?.includes(command.name))
+    if (!available) throw new Error(`Unknown side command /${command.name}. Type / to see available commands.`)
+    this.controlling = true
+    try {
+      if (command.name === 'model' && command.args) {
+        const chosen = this.state.models?.find(m => m.value === command.args || m.resolvedModel === command.args || m.displayName.toLowerCase() === command.args.toLowerCase())
+        // Also accept provider model IDs, as the native CLI does.
+        await this.run.setModel(chosen?.value ?? command.args)
+        this.state.model = chosen?.resolvedModel ?? command.args
+        this.state.notice = `Model: ${modelLabel(this.state.model, this.state.models)}`
+        this.changed()
+      } else if (command.name === 'effort') {
+        if (command.args) {
+          if (!['low', 'medium', 'high', 'xhigh', 'max', 'auto'].includes(command.args)) throw new Error('Choose low, medium, high, xhigh, max, or auto.')
+          await this.run.applyFlagSettings({ effortLevel: command.args === 'auto' ? null : command.args as 'low' | 'medium' | 'high' | 'xhigh' | 'max' })
+          this.state.effort = command.args
+          this.state.notice = `Effort: ${command.args}`
+          this.changed()
+        } else this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort low, medium, high, xhigh, max, or auto.`)
+      } else if (command.name === 'help') {
+        this.local('**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\n' + this.state.commands!.map(c => `- **/${c.name}** ${c.argumentHint} — ${c.description}`).join('\n'))
+      } else if (command.name === 'model') {
+        this.local(`**${modelLabel(this.state.model ?? '', this.state.models)}**\n\n` + this.state.models!.map(m => `- /model ${m.value} — ${m.description}`).join('\n'))
+      } else {
+        // Let Claude dispatch its own commands/skills, including their arguments.
+        // Never prepend prose to a slash command, even on the first side turn.
+        this.send(text, true)
+      }
+    } finally { this.controlling = false }
+  }
+  private local(text: string) {
+    this.state.messages.push({ id: crypto.randomUUID(), role: 'assistant', text })
+    this.state.notice = undefined
+    this.changed()
+  }
+  private assertIdle() {
     if (this.closed || this.ended) throw new Error('Conversation is closed. Close and reopen /side.')
-    if (this.state.status === 'working' || this.state.status === 'permission') throw new Error('Wait for the current reply, or stop it first')
+    if (this.controlling || this.state.status === 'working' || this.state.status === 'permission') throw new Error('Wait for the current reply, or stop it first')
+  }
+  send(text: string, command = false) {
+    if (!command) this.assertIdle()
     if (!text.trim() || text.length > 50000) throw new Error('Enter a message of at most 50,000 characters')
     this.state.messages.push({ id: crypto.randomUUID(), role: 'user', text })
-    const content = this.first
+    const content = this.first && !command
       ? 'The user opened a separate side chat from this conversation. Use the inherited context to answer their questions directly here, without continuing the parent task. Do not message other sessions unless the user asks.\n\n' + text
       : text
-    this.first = false
+    if (!command) this.first = false
     this.state.status = 'working'
     this.state.error = undefined
     this.state.notice = undefined
@@ -83,6 +146,7 @@ export class Conversation {
     settle(allow ? { behavior: 'allow', updatedInput } : { behavior: 'deny', message: 'The user declined this action in side chat.' })
   }
   async stop() {
+    if (this.state.status !== 'working' && this.state.status !== 'permission') return
     this.stopping = true
     try { await this.run.interrupt() }
     catch (error) { this.stopping = false; throw error }
@@ -130,7 +194,22 @@ export class Conversation {
     if (message.type === 'system' && message.subtype === 'init') {
       this.state.sessionId = message.session_id
       this.state.runtime = message.claude_code_version
+      this.state.model = message.model
+      if (message.effort !== undefined) this.state.effort = message.effort ?? 'auto'
       if (this.state.status === 'starting') this.state.status = 'ready'
+    } else if (message.type === 'system' && message.subtype === 'commands_changed') {
+      this.state.commands = commandCatalog(message.commands)
+    } else if (message.type === 'system' && message.subtype === 'local_command_output') {
+      this.local(message.content)
+    } else if (message.type === 'conversation_reset') {
+      this.state.sessionId = message.new_conversation_id
+      this.state.messages = []
+      this.blocks.clear()
+      this.state.requests = []
+      this.requestIndexes.clear()
+      this.state.context = 'empty'
+      this.state.notice = 'Conversation cleared'
+      this.first = true
     } else if (message.type === 'stream_event' && !message.parent_tool_use_id) {
       const event = message.event
       if (event.type === 'message_start') this.currentMessage = event.message.id
@@ -158,10 +237,12 @@ export class Conversation {
           tool.toolInput = JSON.stringify(b.input)
         }
       })
-      const value = { id: m.id, usage: m.usage as Usage, cacheMiss: (m as unknown as { diagnostics?: unknown }).diagnostics }
-      const index = this.requestIndexes.get(m.id)
-      if (index !== undefined) this.state.requests[index] = value
-      else { this.requestIndexes.set(m.id, this.state.requests.length); this.state.requests.push(value) }
+      if (m.model !== '<synthetic>') {
+        const value = { id: m.id, usage: m.usage as Usage, cacheMiss: (m as unknown as { diagnostics?: unknown }).diagnostics }
+        const index = this.requestIndexes.get(m.id)
+        if (index !== undefined) this.state.requests[index] = value
+        else { this.requestIndexes.set(m.id, this.state.requests.length); this.state.requests.push(value) }
+      }
     } else if (message.type === 'user' && !message.parent_tool_use_id && Array.isArray(message.message.content)) {
       for (const block of message.message.content) {
         if (block.type !== 'tool_result') continue

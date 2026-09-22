@@ -1,0 +1,31 @@
+{
+  "runtime": "Homebrew Claude Code 2.1.278",
+  "date": "2026-09-22",
+  "ui_version": "0.2.0",
+  "real_pty_checks": [
+    "Long draft wraps across rows; Shift+Enter preserves a visible second line",
+    "Command picker supports arrow selection and Enter execution",
+    "Side model changed to Sonnet while parent stayed on Opus",
+    "Session-only effort set to medium through applyFlagSettings",
+    "Project /side-check recalled inherited APRICOT-820 marker",
+    "/context returned side usage without adding a model request",
+    "/clear reset side messages and session context",
+    "Unknown command kept the draft and displayed an inline error",
+    "Side Bash read of the synthetic fixture returned COBALT-417; tool details expanded",
+    "Permission denial and Stop settled the side turn",
+    "Pane reflowed in a 124-column, 32-row terminal; all tested helpers stopped"
+  ],
+  "limits": [
+    "Client editors require a click for keyboard focus; keyboard-only autofocus needs a host API",
+    "Typing while focus is in the main composer is still a main-chat action; the side caret retains its position",
+    "PTY captures are terminal-cell renders, not native Ghostty screenshots",
+    "Only sampled commands and a project skill were exercised; not every catalog entry or native dialog",
+    "Parent cache reuse remains unresolved; this UI iteration is not a new cache benchmark"
+  ],
+  "checks": {
+    "unit_tests": 25,
+    "assertions": 93,
+    "typecheck": "passed",
+    "mod_validator": "passed"
+  }
+}

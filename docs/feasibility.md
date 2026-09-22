@@ -24,7 +24,7 @@ The mod fills the remaining gap: a continuous conversation and its own tool loop
 
 The native experiment successfully displayed answers and tool results in the pane. Its own `turn.step`, `tool.call`, and classic message hooks did not receive the child activity; `turn.complete` did. An attempted `TaskOutput` poll failed because that tool was absent from this runtime. Filtering owned completion notifications prevented extra parent model turns, but queue metadata could still contain the child result in the parent's raw log. That did not meet the intended temporary, independent streaming-chat behavior.
 
-The SDK backend leaves model execution to the existing Homebrew Claude binary. The mod sends a parent session ID, directory, and model to a local helper, which pins a saved message UUID and resumes a fork. It does not flatten or summarize the parent's history into a new user prompt. Side-chat instructions are appended as the first new user message, not inserted into the inherited history or system prefix.
+The SDK backend leaves model execution to the existing Homebrew Claude binary. The mod sends a parent session ID, directory, and model to a local helper, which pins a saved message UUID and resumes a fork. It does not flatten or summarize the parent's history into a new user prompt. Side-chat instructions prefix the first ordinary new user message, not the inherited history or system prefix. Slash commands are passed unchanged to Claude's dispatcher; prepending prose to them prevents command recognition.
 
 When the main chat is empty, the helper starts a fresh temporary conversation without resume flags. It only does this when the main UI confirms there are no messages. Unavailable history from a nonempty main chat produces a readable error and Retry action. This fixes the initial prototype's fresh-session failure, which exposed a Bun stack trace and left the pane saying “Opening conversation…”.
 
@@ -65,7 +65,11 @@ Validation used `/opt/homebrew/bin/claude` **2.1.278** in an actual 180-column P
 
 Raw synthetic traces and terminal output are in the local ignored `work/e2e-*` folders. The PTY capture is a rendering of recorded terminal cells. Native Ghostty inspection was blocked by the computer-use app access policy, so a real Ghostty window was not visually verified.
 
+The 0.2 UI iteration additionally exercised wrapping and Shift+Enter in the real Homebrew PTY, model selection (Sonnet in the side while the parent remained on Opus), session-only effort changes, a project slash command recalling inherited marker `APRICOT-820`, `/context`, `/clear`, unknown-command recovery, expandable tool results, permission denial/Stop, and a 124-column terminal. Command output marked `<synthetic>` is excluded from the model-request ledger. The editor/transport tests cover grapheme deletion, visual cursor movement, send acknowledgement, and draft retention on errors. See `docs/evidence/ux-validation.json` for the scope; all available commands and native dialogs have not been exhaustively validated.
+
 ## Remaining engineering work
+
+The stock Mods `Input` is documented as a one-line field. A live probe showed that Shift+Enter preserves a newline, but long lines truncate and the native field offers no wrap or cursor API. The replacement uses the supported drawing-thread `Client` API for text layout, grapheme navigation, key modifiers, and completion menus. `Client` focus is click-only: `$.ui.focus` addresses Button/Input/Select, and a probe targeting the Client was rejected. Full keyboard autofocus requires an upstream API addition. The caret remains drawn after Escape because Client focus-loss notifications are also unavailable.
 
 1. Establish an upstream-supported way to reuse the parent's full request configuration in a streaming, non-persistent fork, or obtain streaming and persistence control for native Mods agent forks. This is the highest-value improvement.
 2. Prove full tool/settings parity, including CLI-supplied MCP servers, dynamic plugins, transient approvals, and non-default permission modes.

@@ -29,15 +29,15 @@ async function main() {
         const body = raw ? JSON.parse(raw) : {}
         if (path === '/send') {
           if (typeof body.text !== 'string') throw new Error('Missing message')
-          conversation.send(body.text)
+          await conversation.submit(body.text)
         } else if (path === '/permission') {
           if (typeof body.id !== 'string' || typeof body.allow !== 'boolean') throw new Error('Invalid decision')
           conversation?.decide(body.id, body.allow, body.answers)
         } else if (path === '/stop') await conversation?.stop()
         else if (path === '/close') setTimeout(shutdown, 20)
         else return new Response('Not found', { status: 404 })
-        return Response.json({ ok: true })
-      } catch (error) { return Response.json({ error: String(error) }, { status: 400 }) }
+        return Response.json(conversation.state)
+      } catch (error) { return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 }) }
     },
   })
 

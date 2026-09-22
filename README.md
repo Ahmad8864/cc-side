@@ -23,8 +23,11 @@ cd /path/to/your/project
 /Users/Ahmad/git/cc-side/scripts/dev.sh
 ```
 
-- Enter sends a message in the side input; follow-ups stay in that conversation.
-- Escape returns keyboard focus to the main chat. `/side` focuses the pane again.
+- Click the side composer to type. Long text wraps; Shift+Enter (or Alt+Enter where the terminal reports it) adds a newline. Enter sends. The draft grows up to eight rows and scrolls to keep the insertion point visible.
+- Type `/` for commands and project skills discovered from the side process. Use ↑/↓ to select, Tab to complete, or Enter to run. `/model ` and `/effort ` open pickers. Model and effort changes apply to this side process only.
+- `/help`, `/context`, `/clear`, `/compact`, `/usage` (including `/cost` and `/stats` aliases), and discovered skills use the side conversation. Unknown commands show an error and keep the draft. Claude's own commands retain their normal behavior; terminal-only dialogs are not reproduced by the mod.
+- The active model appears in the header and beside the composer, so it remains visible at the bottom of a long conversation. Click a tool row to expand its input and result.
+- Escape returns keyboard focus to the main chat. `/side` brings the pane back; click its composer to resume typing. **Current Mods limitation:** custom `Client` editors cannot receive keyboard focus through `autoFocus` or `$.ui.focus`. Clicking the editor gives it focus; using other controls can require another click. The insertion point remains visible when focus returns to main. Ctrl+C belongs to Claude's host; use Stop or `/stop` to stop the side turn.
 - Tool permission buttons and `AskUserQuestion` answers appear inside the pane. Tab or the mouse selects actions.
 - Stop interrupts the current turn. Close or `/side close` discards the side conversation and stops its process.
 - `/side stats` reports model requests, cache read/write tokens, and streamed text deltas. It does not send those statistics to the model.
@@ -52,7 +55,7 @@ bun run typecheck
 bun run validate
 ```
 
-`hooks/register.tsx` owns the native pane and command. `bridge/` owns the SDK conversation, local authenticated transport, and child lifecycle. `shared/` defines the small state protocol. There is no web frontend, terminal multiplexer, copied model prompt, or custom model API client.
+`hooks/register.tsx` owns the native pane and command. `hooks/composer.tsx` runs the wrapping editor and command picker on the Mods drawing thread; `shared/editor.ts` holds its text operations. Client posts carry complete snapshots and acknowledged submissions so coalescing cannot drop or duplicate a send. `bridge/` owns the SDK conversation, local authenticated transport, and child lifecycle. There is no web frontend, terminal multiplexer, copied model prompt, or custom model API client.
 
 The helper binds only to `127.0.0.1` on a random port and requires a random bearer capability held in memory. It rejects browser-origin requests, expires after 30 seconds without pane heartbeats, and exits when the owning Claude process disappears. Tool approvals do not write new permanent permission rules.
 
