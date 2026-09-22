@@ -2,8 +2,9 @@ import { expect, test } from 'bun:test'
 import type { Options, Query, SDKMessage, SDKUserMessage, query } from '@anthropic-ai/claude-agent-sdk'
 import { Conversation } from '../bridge/conversation.ts'
 import { AsyncQueue } from '../bridge/queue.ts'
+import type { StartOptions } from '../shared/protocol.ts'
 
-function harness() {
+function harness(overrides: Partial<StartOptions> = {}) {
   let options!: Options
   let input!: AsyncIterable<SDKUserMessage>
   let closed = false
@@ -18,10 +19,19 @@ function harness() {
       async interrupt() { interrupted = true },
     }) as unknown as Query
   }) as typeof query
-  const chat = new Conversation({ parentSessionId: 'parent', resumeSessionAt: 'tip', cwd: '/project', model: 'same-as-parent' }, createQuery)
+  const chat = new Conversation({ parentSessionId: 'parent', resumeSessionAt: 'tip', cwd: '/project', model: 'same-as-parent', ...overrides }, createQuery)
   return { chat, options, input, output, closed: () => closed, interrupted: () => interrupted }
 }
 const event = (value: unknown) => value as SDKMessage
+
+test('an empty parent starts without resume flags and still disables persistence', () => {
+  const h = harness({ allowEmptyParent: true, resumeSessionAt: undefined })
+  expect(h.options.resume).toBeUndefined()
+  expect(h.options.forkSession).toBeUndefined()
+  expect(h.options.persistSession).toBe(false)
+  expect(h.chat.state.context).toBe('empty')
+  h.chat.close()
+})
 
 test('streams reconcile snapshots whose indexes exclude thinking; usage counts requests once', () => {
   const { chat } = harness()

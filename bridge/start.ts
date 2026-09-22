@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import type { Endpoint, StartOptions } from '../shared/protocol.ts'
+import type { StartupResult, StartOptions } from '../shared/protocol.ts'
 
 const options: StartOptions = JSON.parse(await Bun.stdin.text())
 options.ownerPid = process.ppid
@@ -14,9 +14,9 @@ child.stdout.on('data', chunk => {
   output += chunk
   const end = output.indexOf('\n')
   if (end < 0) return
-  const endpoint: Endpoint = JSON.parse(output.slice(0, end))
+  const result: StartupResult = JSON.parse(output.slice(0, end))
   clearTimeout(timeout)
-  process.stdout.write(JSON.stringify(endpoint) + '\n')
+  process.stdout.write(JSON.stringify(result) + '\n')
   child.stdout.destroy(); child.stderr.destroy(); child.unref()
   process.exit(0)
 })

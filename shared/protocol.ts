@@ -16,6 +16,7 @@ export type ChatState = {
   sessionId?: string
   error?: string
   notice?: string
+  context?: 'inherited' | 'empty'
   usage?: Usage
   requests: { id: string; usage: Usage; cacheMiss?: unknown }[]
   textDeltas: number
@@ -23,6 +24,7 @@ export type ChatState = {
 }
 export type StartOptions = {
   parentSessionId: string
+  allowEmptyParent?: boolean
   resumeSessionAt?: string
   cwd: string
   model: string
@@ -31,3 +33,4 @@ export type StartOptions = {
   isolatedTest?: boolean
 }
 export type Endpoint = { url: string; token: string; pid: number }
+export type StartupResult = Endpoint | { error: string }

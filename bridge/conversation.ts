@@ -16,6 +16,7 @@ export class Conversation {
   private stopping = false
 
   constructor(options: StartOptions, createQuery: typeof query = query) {
+    this.state.context = options.resumeSessionAt ? 'inherited' : 'empty'
     const env: Record<string, string | undefined> = { ...process.env, CC_SIDE_WORKER: '1', CLAUDE_CODE_SKIP_PROMPT_HISTORY: '1' }
     delete env.CLAUDECODE
     delete env.CC_SIDE_TRACE
@@ -23,7 +24,8 @@ export class Conversation {
       prompt: this.input,
       options: {
         pathToClaudeCodeExecutable: '/opt/homebrew/bin/claude',
-        cwd: options.cwd, resume: options.parentSessionId, resumeSessionAt: options.resumeSessionAt, forkSession: true,
+        cwd: options.cwd,
+        ...(options.resumeSessionAt ? { resume: options.parentSessionId, resumeSessionAt: options.resumeSessionAt, forkSession: true } : {}),
         persistSession: false, includePartialMessages: true,
         model: options.model, systemPrompt: { type: 'preset', preset: 'claude_code' },
         settingSources: options.settingSources ?? ['user', 'project', 'local'],

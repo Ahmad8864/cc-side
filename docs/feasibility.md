@@ -26,6 +26,8 @@ The native experiment successfully displayed answers and tool results in the pan
 
 The SDK backend leaves model execution to the existing Homebrew Claude binary. The mod sends a parent session ID, directory, and model to a local helper, which pins a saved message UUID and resumes a fork. It does not flatten or summarize the parent's history into a new user prompt. Side-chat instructions are appended as the first new user message, not inserted into the inherited history or system prefix.
 
+When the main chat is empty, the helper starts a fresh temporary conversation without resume flags. It only does this when the main UI confirms there are no messages. Unavailable history from a nonempty main chat produces a readable error and Retry action. This fixes the initial prototype's fresh-session failure, which exposed a Bun stack trace and left the pane saying “Opening conversation…”.
+
 ## Cache measurements
 
 These are **per model request**, not summed turn totals. One turn that uses a tool can contain multiple requests; adding them would count the same prefix more than once. Inputs were synthetic, the parent history was short, and the account used Opus 5 with low effort. These are observations, not a benchmark of all account/configuration combinations.
@@ -58,6 +60,7 @@ Validation used `/opt/homebrew/bin/claude` **2.1.278** in an actual 180-column P
 - `AskUserQuestion` displayed choices and a text answer field; choosing Cyan and sending the answer continued the side conversation.
 - Duplicate streamed/final text blocks were found during testing, fixed, and covered by regression tests.
 - Reopening the pane started a clear conversation, retained the updated parent context, and did not retain the closed side chat's fixture result.
+- Fresh-session regression: `/side` opened before any main-chat message; the side answered a first question and a follow-up. After the main chat started, closing and reopening correctly inherited its saved marker. A simulated startup failure displayed a short error and Retry button; Retry recovered without losing the draft or making a model request before submission.
 - Stop settled an SDK turn containing a delayed Python file-writing request, and the intended file remained absent after its delay elapsed. This checks cancellation behavior, not exhaustive descendant-process termination. Closing the pane terminated the helper and Claude child, and no child JSONL or child session directory was found.
 
 Raw synthetic traces and terminal output are in the local ignored `work/e2e-*` folders. The PTY capture is a rendering of recorded terminal cells. Native Ghostty inspection was blocked by the computer-use app access policy, so a real Ghostty window was not visually verified.

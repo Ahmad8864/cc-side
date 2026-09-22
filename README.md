@@ -14,7 +14,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Send a normal message first, then type `/side` or `/side your question`. Use a terminal at least 110 columns wide. The launcher enables the fullscreen renderer and experimental function hooks for this process only; it explicitly runs `/opt/homebrew/bin/claude` and uses your existing Claude Code login.
+Type `/side` or `/side your question`, including in a brand-new main chat. A saved main conversation is inherited; an empty main chat starts a new temporary conversation in the pane. Use a terminal at least 110 columns wide. The launcher enables the fullscreen renderer and experimental function hooks for this process only; it explicitly runs `/opt/homebrew/bin/claude` and uses your existing Claude Code login.
 
 To use another project, run the launcher from that project's directory:
 
@@ -37,10 +37,10 @@ The requested right-hand chat is feasible with the current Mods API. The selecte
 
 ## Scope and limits
 
-- Context is the **saved snapshot at opening**; later main-chat messages are not synchronized. Unflushed in-flight output is not promised. A session with no saved messages cannot be forked yet.
+- Context is the **saved snapshot at opening**; later main-chat messages are not synchronized. An empty main chat starts a fresh side conversation. If a nonempty main chat has not been saved yet, the pane asks you to wait and Retry rather than silently drop its context. Unflushed in-flight output is not promised.
 - Temporary means no resumable child conversation transcript. It is not a secure-erasure promise: tool outputs, files, configured hooks/telemetry, and the provider's data policies still apply. Background tools can create temporary output files.
 - The child uses default Claude permission checks and asks in the pane. It loads normal user/project/local settings. Transient parent-session permission grants, CLI-only MCP configurations, and dynamically loaded plugins are not comprehensively cloned. Managed policy still applies.
-- Compact and very long histories, attachments, remote sessions, Windows/Linux, multiple concurrent side panes, and exhaustive parity with all Claude tools are not validated. This prototype uses one side pane and requires a persisted local parent.
+- Compact and very long histories, attachments, remote sessions, Windows/Linux, multiple concurrent side panes, and exhaustive parity with all Claude tools are not validated. This prototype uses one side pane in a local interactive session.
 - Mods/function hooks are evolving. The checked-in declaration was exported from the tested Homebrew binary. Revalidate after upgrading; an SDK upgrade alone does not establish compatibility.
 - Editing the mod can reload it and discard its in-memory UI state. Its helper exits when its heartbeat disappears. No chat restoration after reload is implemented.
 

@@ -1,5 +1,5 @@
 import type { Register } from 'claude-code'
-import type { ChatState, Endpoint, StartOptions } from '../shared/protocol.ts'
+import type { ChatState, Endpoint, StartOptions, StartupResult } from '../shared/protocol.ts'
 import { questionsFor } from '../shared/questions.ts'
 
 const PANE = 'side'
@@ -8,6 +8,7 @@ const empty = (): ChatState => ({ revision: -1, status: 'starting', messages: []
 export const register: Register = on => {
   let host: {
     start: (options: StartOptions) => Promise<Endpoint>
+    options: () => Promise<StartOptions>
     request: (endpoint: Endpoint, path: string, body?: unknown) => Promise<string>
     write: (path: string, text: string) => Promise<void>
     invalidate: () => void
@@ -21,6 +22,7 @@ export const register: Register = on => {
   let draft = ''
   let localError = ''
   let sending = false
+  let connecting = false
   let tracePath: string | undefined
   const events: unknown[] = []
   let writes = Promise.resolve()
@@ -74,6 +76,28 @@ export const register: Register = on => {
     } catch (error) { if (epoch === generation) localError = String(error) }
     finally { if (epoch === generation) { sending = false; host.invalidate() } }
   }
+  const connect = async () => {
+    if (!opened || connecting) return
+    connecting = true
+    state = empty()
+    localError = ''
+    follow = true
+    const epoch = ++generation
+    host.invalidate()
+    try {
+      const connection = await host.start(await host.options())
+      if (epoch !== generation) { await host.request(connection, '/close'); return }
+      endpoint = connection
+      trace('side.opened', { pid: connection.pid, placement: 'right' })
+      void poll(epoch)
+    } catch (error) {
+      if (epoch === generation) {
+        localError = error instanceof Error ? error.message : String(error)
+        state.status = 'error'
+        host.invalidate()
+      }
+    } finally { if (epoch === generation) connecting = false }
+  }
   const close = async () => {
     const old = endpoint
     generation++
@@ -83,6 +107,7 @@ export const register: Register = on => {
     draft = ''
     answers = {}
     sending = false
+    connecting = false
     localError = ''
     if (old) {
       try { await host.request(old, '/close') }
@@ -96,10 +121,20 @@ export const register: Register = on => {
     if (!e.isInteractive || await $.env.get('CC_SIDE_WORKER')) return result
     const bun = await $.env.get('CC_SIDE_BUN') ?? 'bun'
     host = {
+      options: async () => {
+        const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
+        return {
+          parentSessionId: await $.session.id(), cwd: await $.session.cwd(), model: await $.session.model(),
+          allowEmptyParent: (await $.session.messages()).length === 0,
+          ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),
+        }
+      },
       start: async options => {
         const result = await $.process.run([bun, `${$.plugin.root}/bridge/start.ts`], { stdin: JSON.stringify(options), timeoutMs: 15000 })
-        if (result.exitCode) throw new Error(result.stderr || 'Could not start the side process')
-        return JSON.parse(result.stdout)
+        if (result.exitCode) throw new Error('Could not start the side process. Check that Bun and the project dependencies are installed, then retry.')
+        const startup: StartupResult = JSON.parse(result.stdout)
+        if ('error' in startup) throw new Error(startup.error)
+        return startup
       },
       request: async (connection, path, body) => {
         const response = await $.http.fetch(connection.url + path, {
@@ -137,25 +172,13 @@ export const register: Register = on => {
     if (!e.presentation.isFullscreen || e.presentation.columns < 110) {
       return { text: 'Side chat needs fullscreen rendering and a terminal at least 110 columns wide. Enable fullscreen with /tui, then run /side.' }
     }
-    if (!opened) {
-      opened = true
-      state = empty()
-      follow = true
-      const epoch = ++generation
-      await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: Math.max(45, Math.floor(e.presentation.columns * 0.44)) })
-      try {
-        const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
-        const connection = await host.start({
-          parentSessionId: await $.session.id(), cwd: await $.session.cwd(), model: await $.session.model(),
-          ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),
-        })
-        if (epoch !== generation) { await host.request(connection, '/close'); return {} }
-        endpoint = connection
-        trace('side.opened', { pid: connection.pid, placement: 'right' })
-        void poll(epoch)
-      } catch (error) { if (epoch === generation) { localError = String(error); host.invalidate() } }
-    } else await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: Math.max(45, Math.floor(e.presentation.columns * 0.44)) })
-    if (arg) void send(arg)
+    opened = true
+    await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: Math.max(45, Math.floor(e.presentation.columns * 0.44)) })
+    if (!endpoint) await connect()
+    if (arg) {
+      if (endpoint) void send(arg)
+      else draft = arg
+    }
     return {}
   })
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
@@ -164,7 +187,7 @@ export const register: Register = on => {
     const busy = sending || state.status === 'working' || state.status === 'permission'
     return <Box flexDirection="column" paddingX={1} minHeight={e.props.scroll.bodyRows}>
       <Text bold color="claude">Side chat</Text>
-      <Text dimColor>Context from main · temporary conversation</Text>
+      <Text dimColor>{state.context === 'empty' ? 'New conversation · main chat was empty' : 'Context from main · temporary conversation'}</Text>
       <Box flexDirection="column" flexGrow={1} paddingTop={1}>
         {!state.messages.length ? <Text dimColor>Ask a question, explore an idea, or use tools here.</Text> : null}
         {state.messages.map(message => <Box key={message.id} flexDirection="column" marginBottom={1}>
@@ -204,8 +227,9 @@ export const register: Register = on => {
       </Box>)}
       {localError || state.error ? <Text color="error">{localError || state.error}</Text> : null}
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>{state.status === 'permission' ? 'Waiting for your decision' : busy ? 'Claude is working…' : state.status === 'starting' && !endpoint ? 'Opening conversation…' : state.notice ?? 'Ready'}</Text>
-        <Input key="side-input" autoFocus value={draft} placeholder="Ask a follow-up…" submitLabel="send" onInput={value => { draft = value }} onSubmit={value => { void send(value) }} />
+        <Text dimColor>{state.status === 'error' && !endpoint ? 'Could not open side chat' : state.status === 'permission' ? 'Waiting for your decision' : busy ? 'Claude is working…' : state.status === 'starting' && !endpoint ? 'Opening conversation…' : state.notice ?? 'Ready'}</Text>
+        {state.status === 'error' && !endpoint ? <Button key="retry-side" label="Retry" onPress={() => { void connect() }} />
+          : <Input key="side-input" autoFocus value={draft} placeholder="Ask a follow-up…" submitLabel="send" onInput={value => { draft = value }} onSubmit={value => { void send(value) }} />}
         <Box gap={2} marginTop={1}>
           <Text dimColor>Esc to main · Tab for actions</Text>
           {busy ? <Button key="stop-side" label="Stop" onPress={() => { void action('/stop') }} /> : null}
