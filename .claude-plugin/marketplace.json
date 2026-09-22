@@ -1,0 +1,20 @@
+{
+  "name": "cc-side",
+  "metadata": {
+    "description": "A temporary side chat for Claude Code."
+  },
+  "owner": {
+    "name": "Ahmad"
+  },
+  "plugins": [
+    {
+      "name": "cc-side",
+      "description": "A separate agent conversation in Claude Code's right-hand pane, forked from the current context.",
+      "source": {
+        "source": "archive",
+        "url": "https://github.com/Ahmad8864/cc-side/releases/download/cc-side--v0.2.4/cc-side-0.2.4.zip",
+        "sha256": "9aa6588124672fd68ccd90253f7160d404b02da4bf8afc52ce7f8e0e65d9bdc3"
+      }
+    }
+  ]
+}

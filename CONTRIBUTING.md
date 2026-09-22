@@ -61,8 +61,9 @@ plugin ZIP, SHA-256 checksum, and marketplace catalog. The ZIP contains no
 
 Commit the change, then use `claude plugin tag --push` to create and push the
 `cc-side--v<version>` release tag. GitHub Actions builds both macOS helpers and
-publishes the ZIP and catalog. Users install from the catalog's stable
-`releases/latest/download/marketplace.json` URL through Claude's plugin manager.
+publishes the ZIP and catalog, then updates `.claude-plugin/marketplace.json` on
+`main`. Users add `Ahmad8864/cc-side` through Claude's plugin manager; the catalog
+points to the release ZIP and its checksum.
 
 To exercise a release with the PTY harness, set `CC_SIDE_PLUGIN_DIR` to the
 absolute `dist/plugin` path and `CC_SIDE_CLAUDE` to the installed Claude executable.

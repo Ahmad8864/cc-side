@@ -53,7 +53,6 @@ const catalog = {
   plugins: [
     {
       name: manifest.name,
-      version: manifest.version,
       description: manifest.description,
       source: {
         source: 'archive',

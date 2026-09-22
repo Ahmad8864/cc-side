@@ -12,7 +12,7 @@ Requires macOS and Claude Code. The release includes standalone helpers for Appl
 Silicon and Intel; users do not need Bun, Node.js, or an npm install.
 
 ```sh
-claude plugin marketplace add https://github.com/Ahmad8864/cc-side/releases/latest/download/marketplace.json
+claude plugin marketplace add Ahmad8864/cc-side
 claude plugin install cc-side@cc-side
 ```
 

@@ -28,3 +28,13 @@ jobs:
           dist/cc-side-*.zip dist/marketplace.json dist/SHA256SUMS
           --verify-tag --title "cc-side ${GITHUB_REF_NAME#cc-side--v}"
           --generate-notes
+      - name: Update marketplace
+        run: |
+          git fetch origin main
+          git checkout main
+          cp dist/marketplace.json .claude-plugin/marketplace.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .claude-plugin/marketplace.json
+          git diff --cached --quiet || git commit -m "Update marketplace for $GITHUB_REF_NAME"
+          git push origin main
