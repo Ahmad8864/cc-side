@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: ['cc-side--v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - name: Check standalone helper
+        run: dist/plugin/bin/cc-side-darwin-$(uname -m | sed s/x86_64/x64/) --version
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/cc-side-*.zip dist/marketplace.json dist/SHA256SUMS
+          --verify-tag --title "cc-side ${GITHUB_REF_NAME#cc-side--v}"
+          --generate-notes

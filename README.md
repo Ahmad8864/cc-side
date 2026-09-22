@@ -6,21 +6,25 @@ Closing it discards the conversation.
 
 ![Side chat in Claude Code](docs/side-chat.png)
 
-## Setup
+## Install
 
-Requires macOS, [Bun](https://bun.sh), a Homebrew installation of Claude Code,
-and an existing Claude login. Tested with Claude Code **2.1.280** and Bun **1.2.23**.
-Mods are experimental; other runtime versions may need changes.
+Requires macOS and Claude Code. The release includes standalone helpers for Apple
+Silicon and Intel; users do not need Bun, Node.js, or an npm install.
 
 ```sh
-brew install --cask claude-code
-bun install --frozen-lockfile
-bun run dev
+claude plugin marketplace add https://github.com/Ahmad8864/cc-side/releases/latest/download/marketplace.json
+claude plugin install cc-side@cc-side
 ```
 
-Run those commands from this checkout. To work in another directory, run
-`/path/to/cc-side/scripts/dev.sh` there. The launcher enables fullscreen rendering
-and function hooks for that process. Use a terminal at least 110 columns wide.
+Mods currently require experimental function hooks and fullscreen rendering.
+Restart Claude with both enabled:
+
+```sh
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 CLAUDE_CODE_NO_FLICKER=1 claude
+```
+
+Use a terminal at least 110 columns wide. Tested with Claude Code **2.1.280**;
+Mods APIs can change between releases.
 
 ## Usage
 
@@ -52,4 +56,5 @@ its automatic sizing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the code layout and tests.
 
-MIT licensed. An unofficial project, not affiliated with Anthropic.
+MIT licensed. Bundled components retain their own [licenses](licenses/).
+An unofficial project, not affiliated with Anthropic.

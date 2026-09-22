@@ -11,5 +11,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["types", "hooks", "bridge", "shared", "tests"]
+  "include": ["types", "hooks", "bridge", "shared", "tests", "scripts/*.ts"]
 }

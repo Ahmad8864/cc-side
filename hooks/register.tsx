@@ -211,9 +211,10 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     if (!e.isInteractive || (await $.env.get('CC_SIDE_WORKER'))) return result
-    const bun = (await $.env.get('CC_SIDE_BUN')) ?? 'bun'
+    const bun = await $.env.get('CC_SIDE_BUN')
+    const helper = bun ? [bun, `${$.plugin.root}/bridge/main.ts`] : [`${$.plugin.root}/bin/cc-side`]
     host = {
-      ...createBridgeClient($, bun),
+      ...createBridgeClient($, helper),
       write: (path, text) => $.fs.write(path, text),
       invalidate: () => {
         $.ui.invalidate('ui.render')
@@ -489,7 +490,7 @@ export const register: Register = (on) => {
 type BridgePath = '/state' | '/send' | '/permission' | '/stop' | '/close'
 type BridgeClient = ReturnType<typeof createBridgeClient>
 
-function createBridgeClient($: EngineInterface, bun: string) {
+function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
     async options(): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
@@ -503,13 +504,13 @@ function createBridgeClient($: EngineInterface, bun: string) {
     },
 
     async start(options: StartOptions): Promise<Endpoint> {
-      const result = await $.process.run([bun, `${$.plugin.root}/bridge/start.ts`], {
+      const result = await $.process.run(helper, {
         stdin: JSON.stringify(options),
         timeoutMs: 15000,
       })
       if (result.exitCode) {
         throw new Error(
-          'Could not start the side process. Check that Bun and the project dependencies are installed, then retry.',
+          'Could not start the side helper. Reinstall cc-side, or check the development setup if running from source.',
         )
       }
       const startup: StartupResult = JSON.parse(result.stdout)

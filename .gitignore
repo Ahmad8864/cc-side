@@ -1,5 +1,7 @@
 node_modules/
 work/
+dist/
+bin/cc-side-darwin-*
 .DS_Store
 __pycache__/
 .claude/settings.local.json

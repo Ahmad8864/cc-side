@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+plugin_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) helper="$plugin_bin/cc-side-darwin-arm64" ;;
+  Darwin-x86_64) helper="$plugin_bin/cc-side-darwin-x64" ;;
+  *) echo 'cc-side currently supports macOS only.' >&2; exit 1 ;;
+esac
+
+if [ -z "${CC_SIDE_CLAUDE:-}" ]; then
+  for candidate in /opt/homebrew/bin/claude /usr/local/bin/claude; do
+    if [ -x "$candidate" ]; then
+      CC_SIDE_CLAUDE=$candidate
+      break
+    fi
+  done
+  CC_SIDE_CLAUDE=${CC_SIDE_CLAUDE:-$(command -v claude || true)}
+fi
+if [ ! -x "$CC_SIDE_CLAUDE" ]; then
+  echo 'Claude Code was not found. Install it before using cc-side.' >&2
+  exit 1
+fi
+export CC_SIDE_CLAUDE
+exec "$helper" "$@"

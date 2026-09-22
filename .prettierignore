@@ -1,4 +1,6 @@
 node_modules/
 work/
+dist/
+licenses/
 types/claude-code.d.ts
 bun.lock

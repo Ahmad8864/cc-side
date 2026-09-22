@@ -3,11 +3,14 @@
 Keep the side chat small. Fix a specific problem, include a regression check when
 behavior changes, and avoid adding settings for behavior that can have one good default.
 
+Bun is needed only for development and building releases.
+
 ```sh
 bun install --frozen-lockfile
 bun run check       # formatting, types, tests; no Claude account required
 bun run validate    # Homebrew Claude's mod loader checks
 bun run format      # apply formatting
+bun run dev         # run the source plugin
 ```
 
 ## Code layout
@@ -20,7 +23,7 @@ bun run format      # apply formatting
 - `shared/`: protocol types, commands, and pure text/layout operations.
 - `types/`: generated Mods declarations; see its upstream note before updating.
 
-The SDK runs the same Homebrew Claude binary as the parent. It forks a saved
+The SDK runs the installed Claude binary; it is not bundled with the plugin. It forks a saved
 message with persistence disabled. Tools execute through Claude's normal loop.
 The bridge listens on loopback with a random bearer token; it exits when the pane
 stops heartbeating or the parent exits.
@@ -48,3 +51,21 @@ The smoke check consumes two short Claude turns. It covers typing, multiline inp
 sends, follow-ups, activity, and closing/reopening. Test artifacts stay in ignored
 `work/`. `CC_SIDE_TRACE` records conversation contents; use it only with synthetic
 inputs. Captures render recorded terminal cells, not native window screenshots.
+
+## Releases
+
+Bump `version` in `package.json` and `.claude-plugin/plugin.json`, then run
+`bun run check`, `bun run validate`, and `bun run build`. `dist/` contains the
+plugin ZIP, SHA-256 checksum, and marketplace catalog. The ZIP contains no
+`package.json`, lockfile, or dependencies to install.
+
+Commit the change, then use `claude plugin tag --push` to create and push the
+`cc-side--v<version>` release tag. GitHub Actions builds both macOS helpers and
+publishes the ZIP and catalog. Users install from the catalog's stable
+`releases/latest/download/marketplace.json` URL through Claude's plugin manager.
+
+To exercise a release with the PTY harness, set `CC_SIDE_PLUGIN_DIR` to the
+absolute `dist/plugin` path and `CC_SIDE_CLAUDE` to the installed Claude executable.
+Set `CC_SIDE_TEST_PATH=/usr/bin:/bin:/usr/sbin:/sbin` to exclude Bun and Node from
+the test process's PATH. The archive format is documented in
+[Claude's marketplace guide](https://code.claude.com/docs/en/plugin-marketplaces#zip-archives).

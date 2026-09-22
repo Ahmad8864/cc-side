@@ -39,7 +39,7 @@ test('unavailable history of a nonempty parent never silently becomes an empty c
 })
 
 test('startup failure crosses the launcher as a readable error without a Bun stack trace', async () => {
-  const child = Bun.spawn([process.execPath, 'bridge/start.ts'], {
+  const child = Bun.spawn([process.execPath, 'bridge/main.ts'], {
     cwd: fileURLToPath(new URL('..', import.meta.url).href),
     stdin: 'pipe',
     stdout: 'pipe',

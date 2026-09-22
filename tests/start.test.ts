@@ -15,7 +15,11 @@ test('the helper starts from a checkout path containing spaces', async () => {
       join(directory, 'server.ts'),
       `await Bun.stdin.text(); console.log(JSON.stringify({ error: 'Test helper reached' }));`,
     )
-    const child = Bun.spawn([process.execPath, join(directory, 'start.ts')], {
+    await writeFile(
+      join(directory, 'main.ts'),
+      `import { startHelper } from './start.ts'; await startHelper([${JSON.stringify(join(directory, 'server.ts'))}]);`,
+    )
+    const child = Bun.spawn([process.execPath, join(directory, 'main.ts')], {
       stdin: 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',

@@ -22,6 +22,7 @@ function nodes(value: unknown): Tree[] {
 async function harness(
   initialStatus: ChatState['status'] = 'ready',
   permissions: ChatState['permissions'] = [],
+  developmentBun?: string,
 ) {
   const handlers = new Map<string, (...args: any[]) => any>()
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
@@ -30,10 +31,11 @@ async function harness(
     failSend = false
   const requests: { path: string; body: any; url: string }[] = []
   const opens: any[] = []
+  const launches: string[][] = []
   let prompt = ''
   let state: ChatState
   const $ = {
-    env: { get: async () => undefined },
+    env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? developmentBun : undefined) },
     session: {
       id: async () => 'parent',
       cwd: async () => '/project',
@@ -42,7 +44,8 @@ async function harness(
     },
     plugin: { root: '/plugin' },
     process: {
-      run: async () => {
+      run: async (command: string[]) => {
+        launches.push(command)
         starts++
         state = {
           revision: 1,
@@ -138,6 +141,7 @@ async function harness(
     submit,
     requests,
     opens,
+    launches,
     prompt: () => prompt,
     setPrompt: (text: string) => {
       prompt = text
@@ -305,4 +309,13 @@ test('tool permission controls send the explicit allow or deny decision', async 
     await tree.find((n) => n.props.key === `${allow ? 'allow' : 'deny'}-tool`)!.props.onPress()
     expect(h.requests.find((r) => r.path === '/permission')?.body).toEqual({ id: 'tool', allow })
   }
+})
+
+test('installed plugins launch the packaged helper; Bun is an explicit development override', async () => {
+  const installed = await harness()
+  await installed.command()
+  expect(installed.launches).toEqual([['/plugin/bin/cc-side']])
+  const development = await harness('ready', [], '/dev/bun')
+  await development.command()
+  expect(development.launches).toEqual([['/dev/bun', '/plugin/bridge/main.ts']])
 })

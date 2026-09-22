@@ -88,11 +88,15 @@ async function main() {
   )
 }
 
-void main().catch((error) => {
-  activeConversation?.close()
-  // Startup errors are protocol data, not Bun source excerpts in the chat UI.
-  process.stdout.write(
-    JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) + '\n',
-  )
-  process.exitCode = 1
-})
+export async function serve() {
+  try {
+    await main()
+  } catch (error) {
+    activeConversation?.close()
+    // Startup errors are protocol data, not Bun source excerpts in the chat UI.
+    process.stdout.write(
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) + '\n',
+    )
+    process.exitCode = 1
+  }
+}

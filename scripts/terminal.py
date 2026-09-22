@@ -7,6 +7,7 @@ Only synthetic test sessions should enable the trace: it includes conversation t
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 import socket
 import subprocess
@@ -14,7 +15,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CLAUDE = str(ROOT / 'scripts/claude.sh')
+CLAUDE = os.environ.get('CC_SIDE_CLAUDE', str(ROOT / 'scripts/claude.sh'))
+PLUGIN = Path(os.environ.get('CC_SIDE_PLUGIN_DIR', ROOT)).resolve()
 
 
 def serve(directory):
@@ -35,11 +37,17 @@ def serve(directory):
            'CC_SIDE_TEST': '1', 'TERM': 'xterm-256color', 'FORCE_COLOR': '1'}
     env.pop('CLAUDECODE', None)
     env.pop('NO_COLOR', None)
+    if PLUGIN == ROOT:
+        env['CC_SIDE_BUN'] = shutil.which('bun') or 'bun'
+    else:
+        env.pop('CC_SIDE_BUN', None)
+    if 'CC_SIDE_TEST_PATH' in os.environ:
+        env['PATH'] = os.environ['CC_SIDE_TEST_PATH']
     version = subprocess.check_output([CLAUDE, '--version'], text=True).strip()
     (directory / 'runtime.json').write_text(json.dumps({'executable': CLAUDE, 'version': version}, indent=2))
-    child = pexpect.spawn(CLAUDE, ['--plugin-dir', str(ROOT), '--strict-mcp-config',
+    child = pexpect.spawn(CLAUDE, ['--plugin-dir', str(PLUGIN), '--strict-mcp-config',
                           '--mcp-config', '{"mcpServers":{}}', '--setting-sources', 'project,local',
-                          '--effort', 'low', '--allowedTools', 'Read'],
+                          '--model', 'haiku', '--effort', 'low', '--allowedTools', 'Read'],
                          cwd=str(directory), env=env, encoding='utf-8', codec_errors='replace',
                          dimensions=(48, 180), timeout=1)
     screen = pyte.Screen(180, 48)
