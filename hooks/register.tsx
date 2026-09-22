@@ -1,5 +1,5 @@
 import type { Register } from 'claude-code'
-import type { ChatState, Endpoint, StartOptions, StartupResult } from '../shared/protocol.ts'
+import type { ChatState, Endpoint, Receipt, StartOptions, StartupResult, Submission } from '../shared/protocol.ts'
 import { questionsFor } from '../shared/questions.ts'
 import { localCommands, modelLabel } from '../shared/commands.ts'
 import { layout } from '../shared/editor.ts'
@@ -32,14 +32,18 @@ export const register: Register = on => {
   let writes = Promise.resolve()
   let follow = true
   let answers: Record<string, Record<string, string>> = {}
-  let acknowledged = 0
-  let accepted = false
-  let handlingSubmit = 0
+  let receipt: Receipt | null = null
+  const receipts = new Map<string, Receipt>()
+  const pendingSubmissions = new Map<string, Promise<boolean>>()
+  let commandSequence = 0
+  let composerColumns = 70
+  let composerRows = 40
   const expanded = new Set<string>()
-  const composerProps = (columns: number, rows: number): ComposerProps => ({
-    epoch: generation, seed: draft, ack: acknowledged, accepted,
+  const composerProps = (): ComposerProps => ({
+    epoch: generation, seed: draft, receipt,
     busy: sending || state.status === 'working' || state.status === 'permission',
-    columns, maxRows: Math.max(2, Math.min(8, Math.floor(rows / 4))),
+    activity: state.status === 'working' ? state.activity ?? null : null,
+    columns: composerColumns, maxRows: Math.max(2, Math.min(8, Math.floor(composerRows / 4))),
     commands: state.commands ?? localCommands, models: state.models ?? [], model: state.model ?? '',
   })
 
@@ -69,25 +73,26 @@ export const register: Register = on => {
     host.after(state.status === 'working' ? 120 : 700, () => { void poll(epoch) })
   }
   const action = async (path: string, body?: unknown) => {
-    if (!endpoint) return
+    if (!endpoint) return false
     const epoch = generation
     try {
       const result: ChatState = JSON.parse(await host.request(endpoint, path, body))
       if (epoch === generation && result.revision >= state.revision) state = result
+      return epoch === generation
     }
-    catch (error) { if (epoch === generation) localError = String(error) }
-    if (epoch === generation) host.invalidate()
+    catch (error) { if (epoch === generation) localError = String(error); return false }
+    finally { if (epoch === generation) host.invalidate() }
   }
-  const send = async (text: string) => {
+  const send = async (text: string, id = `${generation}:command:${++commandSequence}`): Promise<boolean> => {
     if (text.trim() === '/close') { await host.closePane(); return true }
-    if (text.trim() === '/stop') { await action('/stop'); return true }
+    if (text.trim() === '/stop') return action('/stop')
     if (!text.trim() || sending || !endpoint || state.status === 'working' || state.status === 'permission') return false
     sending = true
     localError = ''
     answers = {}
     const epoch = generation
     try {
-      const result: ChatState = JSON.parse(await host.request(endpoint, '/send', { text: text.trim() }))
+      const result: ChatState = JSON.parse(await host.request(endpoint, '/send', { id, text: text.trim() }))
       if (epoch !== generation) return false
       draft = ''
       if (result.revision >= state.revision) state = result
@@ -105,8 +110,9 @@ export const register: Register = on => {
     localError = ''
     follow = true
     const epoch = ++generation
-    acknowledged = handlingSubmit = 0
-    accepted = false
+    receipt = null
+    receipts.clear()
+    pendingSubmissions.clear()
     host.invalidate()
     try {
       const connection = await host.start(await host.options())
@@ -123,6 +129,7 @@ export const register: Register = on => {
     } finally { if (epoch === generation) connecting = false }
   }
   const close = async () => {
+    if (!opened && !endpoint && !connecting) return
     const old = endpoint
     generation++
     opened = false
@@ -133,7 +140,11 @@ export const register: Register = on => {
     sending = false
     connecting = false
     localError = ''
+    receipt = null
+    receipts.clear()
+    pendingSubmissions.clear()
     expanded.clear()
+    host.invalidate()
     if (old) {
       try { await host.request(old, '/close') }
       catch (error) { trace('side.close-error', String(error)) }
@@ -178,7 +189,8 @@ export const register: Register = on => {
       invalidate: () => { $.ui.invalidate('ui.render') },
       after: (ms, fn) => { $.clock.after(ms, fn) },
       scroll: () => { void $.ui.scroll({ in: PANE, to: 'end' }) },
-      closePane: async () => { await $.ui.close({ id: PANE }) },
+      // Discard explicitly: hiding the host pane is not our state lifecycle.
+      closePane: async () => { await close(); await $.ui.close({ id: PANE }) },
     }
     tracePath = await $.env.get('CC_SIDE_TRACE') ?? undefined
     await $.command.register({ name: 'side', description: 'Open an independent chat beside this conversation', argumentHint: '[question] | close | stats', immediate: true })
@@ -188,8 +200,7 @@ export const register: Register = on => {
   on('command.run', { command: 'side' }, async ($, e) => {
     const arg = e.args.trim()
     if (arg === 'close') {
-      await close()
-      await $.ui.close({ id: PANE })
+      await host.closePane()
       return {}
     }
     if (arg === 'stats') {
@@ -206,7 +217,7 @@ export const register: Register = on => {
     await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: Math.max(45, Math.floor(e.presentation.columns * 0.44)) })
     if (!endpoint) await connect()
     if (arg) {
-      if (endpoint) void send(arg)
+      if (endpoint) await send(arg)
       else draft = arg
     }
     return {}
@@ -216,10 +227,10 @@ export const register: Register = on => {
     const { Box, Text, Markdown, Input, Button, Client } = await $.ui.resolve(e)
     const busy = sending || state.status === 'working' || state.status === 'permission'
     const columns = e.props.bodyColumns - 2
+    composerColumns = columns
+    composerRows = e.props.scroll.bodyRows
     return <Box flexDirection="column" paddingX={1} minHeight={e.props.scroll.bodyRows} width={e.props.bodyColumns}>
-      <Box gap={1}><Text bold color="claude">✳</Text><Text bold>Claude Code</Text><Text dimColor>side chat</Text></Box>
-      <Text dimColor wrap="truncate-end">{state.model ? modelLabel(state.model, state.models) : 'Connecting…'}{state.effort ? ` · ${state.effort} effort` : ''}</Text>
-      {state.cwd ? <Text dimColor wrap="truncate-start">{state.cwd}</Text> : null}
+      <Box gap={2} paddingRight={2}><Text bold>Side chat</Text><Box flexShrink={1}><Text dimColor wrap="truncate-end">{state.model ? modelLabel(state.model, state.models) : ''}</Text></Box></Box>
       <Box flexDirection="column" flexGrow={1} paddingTop={1} width={columns}>
         {state.messages.map(message => <Box key={message.id} flexDirection="column" marginBottom={1}>
           {message.role === 'tool'
@@ -231,7 +242,9 @@ export const register: Register = on => {
             : <Box><Text>⏺ </Text><Box flexDirection="column" width={columns - 2}><Markdown text={message.text || '…'} /></Box></Box>}
         </Box>)}
       </Box>
-      {state.permissions.map(permission => <Box key={permission.id} flexDirection="column" borderStyle="round" paddingX={1}>
+      {/* Keep the editor's ancestor/sibling positions stable. The terminal
+          focus region can remount when conditional siblings appear. */}
+      <Box flexDirection="column">{state.permissions.map(permission => <Box key={permission.id} flexDirection="column" borderStyle="round" paddingX={1}>
         <Text bold color="warning">{permission.tool === 'AskUserQuestion' ? 'Claude has a question' : `Allow ${permission.tool}?`}</Text>
         {questionsFor(permission).length ? questionsFor(permission).map((q, index) => <Box key={`${permission.id}-${index}`} flexDirection="column" marginBottom={1}>
           <Text bold>{q.question}</Text>
@@ -249,40 +262,54 @@ export const register: Register = on => {
           <Input key={`answer-text-${permission.id}-${index}`} label="Answer" value={answers[permission.id]?.[q.question] ?? ''} placeholder="Select above or type…" onInput={value => { answers[permission.id] ??= {}; answers[permission.id][q.question] = value }} onSubmit={() => { host.invalidate() }} />
         </Box>) : <Text>{JSON.stringify(permission.input, null, 2)}</Text>}
         <Box gap={2}>
-          <Button key={`allow-${permission.id}`} label={permission.tool === 'AskUserQuestion' ? 'Send answer' : 'Allow once'} onPress={() => {
+          <Button key={`allow-${permission.id}`} label={permission.tool === 'AskUserQuestion' ? 'Send answer' : 'Allow once'} onPress={async () => {
             if (questionsFor(permission).some(q => !answers[permission.id]?.[q.question]?.trim())) { localError = 'Answer each question before sending.'; host.invalidate(); return }
             localError = ''
-            void action('/permission', { id: permission.id, allow: true, ...(permission.tool === 'AskUserQuestion' ? { answers: answers[permission.id] } : {}) })
+            await action('/permission', { id: permission.id, allow: true, ...(permission.tool === 'AskUserQuestion' ? { answers: answers[permission.id] } : {}) })
           }} />
-          <Button key={`deny-${permission.id}`} label="Deny" onPress={() => { void action('/permission', { id: permission.id, allow: false }) }} />
+          <Button key={`deny-${permission.id}`} label="Deny" onPress={async () => { await action('/permission', { id: permission.id, allow: false }) }} />
         </Box>
-      </Box>)}
-      {localError || state.error ? <Text color="error">{localError || state.error}</Text> : null}
+      </Box>)}</Box>
+      <Box>{localError || state.error ? <Text color="error">{localError || state.error}</Text> : null}</Box>
       <Box marginTop={1} flexDirection="column" width={columns}>
-        {busy || state.status === 'starting' || state.notice ? <Text dimColor>{state.status === 'permission' ? 'Waiting for your decision' : busy ? '✳ Working…' : state.status === 'starting' ? 'Connecting…' : state.notice}</Text> : null}
-        {state.status === 'error' && !endpoint ? <Button key="retry-side" label="Retry" onPress={() => { void connect() }} />
-          : <Client key={`side-composer-${generation}`} module="./composer.tsx" width={columns} props={composerProps(columns, e.props.scroll.bodyRows)} />}
-        <Box gap={2}>
-          <Box flexGrow={1} flexShrink={1}><Text dimColor wrap="truncate-end">{state.model ? `${modelLabel(state.model, state.models).split(' with ')[0]} · ` : ''}Esc main</Text></Box>
-          {busy ? <Button key="stop-side" label="Stop" onPress={() => { void action('/stop') }} /> : null}
-          <Button key="close-side" plain label="Close" onPress={() => { void $.ui.close({ id: PANE }) }} />
+        <Box>{state.status === 'starting' || state.notice ? <Text dimColor>{state.status === 'starting' ? 'Connecting…' : state.notice}</Text> : null}</Box>
+        <Box>{state.status === 'error' && !endpoint ? <Button key="retry-side" label="Retry" onPress={async () => { await connect() }} /> : null}</Box>
+        <Client key={`side-composer-${generation}`} module="./composer.tsx" width={columns} props={composerProps()} />
+        <Box gap={2} justifyContent="flex-end">
+          <Text dimColor>Esc main</Text>
+          {busy ? <Button key="stop-side" plain label="Stop" onPress={async () => { await action('/stop') }} /> : null}
+          <Button key="close-side" plain label="Close" onPress={async () => { await host.closePane() }} />
         </Box>
       </Box>
     </Box>
   })
   on('ui.message', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE || e.element !== `side-composer-${generation}` || !opened) return next(e)
-    const data = e.data as { epoch?: number; seq?: number; text?: string; submit?: { seq?: number; text?: string } }
-    if (!data || data.epoch !== generation || !Number.isSafeInteger(data.seq) || data.seq! < 0 || typeof data.text !== 'string' || data.text.length > 50000) return {}
-    if (data.seq! > acknowledged) draft = data.text
+    const data = e.data as { epoch?: number; seq?: number; instance?: string; text?: string; submit?: Submission }
+    if (!data || data.epoch !== generation || !Number.isSafeInteger(data.seq) || data.seq! < 0 || typeof data.instance !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(data.instance) || typeof data.text !== 'string' || data.text.length > 50000) return {}
     const submission = data.submit
-    if (submission && Number.isSafeInteger(submission.seq) && submission.seq! <= data.seq! && submission.seq! > handlingSubmit && typeof submission.text === 'string' && submission.text.length <= 50000) {
+    if (!submission || !receipts.get(submission.id)?.accepted) draft = data.text
+    if (submission && typeof submission.id === 'string' && submission.id.startsWith(`${generation}:${data.instance}:`) && /^[a-zA-Z0-9:_-]{1,160}$/.test(submission.id) && typeof submission.text === 'string' && submission.text.length <= 50000) {
       const epoch = generation
-      handlingSubmit = submission.seq!
-      const ok = await send(submission.text)
-      if (epoch === generation) { acknowledged = submission.seq!; accepted = !!ok; host.invalidate() }
+      const prior = receipts.get(submission.id)
+      if (prior) receipt = prior
+      else {
+        let pending = pendingSubmissions.get(submission.id)
+        if (!pending) { pending = send(submission.text, submission.id); pendingSubmissions.set(submission.id, pending) }
+        let accepted = false
+        try { accepted = await pending }
+        catch (error) { if (epoch === generation) localError = String(error) }
+        if (epoch !== generation) return {}
+        pendingSubmissions.delete(submission.id)
+        receipt = { id: submission.id, accepted }
+        receipts.set(submission.id, receipt)
+        if (receipts.size > 128) receipts.delete(receipts.keys().next().value!)
+        host.invalidate()
+      }
     }
-    return {}
+    // Reply on the Client's own channel too; it must not depend on a later
+    // pane redraw to release the pending send after an error or remount.
+    return { props: composerProps() }
   })
   on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
     const result = await next(e)

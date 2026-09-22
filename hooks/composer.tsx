@@ -1,15 +1,15 @@
 import type { ClientModule, ClientSurface } from 'claude-code'
-import type { SideCommand, SideModel } from '../shared/protocol.ts'
+import type { Activity, Receipt, SideCommand, SideModel, Submission } from '../shared/protocol.ts'
 import { completions, type Completion } from '../shared/commands.ts'
-import { caret, edit, layout, offsetAt, type Editor } from '../shared/editor.ts'
+import { caret, edit, layout, normalizeKey, offsetAt, type Editor } from '../shared/editor.ts'
+import { activityFrame } from '../shared/activity.ts'
 
 export type ComposerProps = {
-  epoch: number; seed: string; ack: number; accepted: boolean; busy: boolean
+  epoch: number; seed: string; receipt: Receipt | null; busy: boolean; activity: Activity | null
   columns: number; maxRows: number; commands: SideCommand[]; models: SideModel[]; model: string
 }
-type Pending = { seq: number; text: string }
 type State = Editor & {
-  seq: number; selected: number; hiddenMenu: boolean; active: boolean; pending?: Pending
+  instance: string; seq: number; selected: number; hiddenMenu: boolean; active: boolean; pending?: Submission
   history: string[]; historyIndex: number; unsent: string
 }
 type IO = { state: State; props: ComposerProps; menu: Completion[]; send: () => void }
@@ -19,6 +19,7 @@ function snapshot(io: IO, surface: ClientSurface<State>) {
   // A complete snapshot survives Client.post coalescing. The unacknowledged
   // submit stays in every subsequent snapshot, and the host handles it once.
   surface.post({ epoch: io.props.epoch, seq: io.state.seq, text: io.state.text,
+    instance: io.state.instance,
     ...(io.state.pending ? { submit: io.state.pending } : {}) })
 }
 
@@ -26,22 +27,31 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
   const { Box, Text } = surface.elements
   let io = instances.get(surface)
   if (!io) {
-    const state: State = { text: props.seed, cursor: props.seed.length, seq: 0, selected: 0, hiddenMenu: false, active: false, history: [], historyIndex: -1, unsent: '' }
+    const state: State = surface.state ?? { text: props.seed, cursor: props.seed.length,
+      instance: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+      seq: 0, selected: 0, hiddenMenu: false, active: false, history: [], historyIndex: -1, unsent: '' }
     io = { state, props, menu: [], send: () => {} }
     instances.set(surface, io)
     const instance = io
-    surface.every(200, () => { if (instance.state.pending) snapshot(instance, surface) })
+    let lastPost = 0
+    surface.every(120, () => {
+      if (instance.props.activity) surface.setState({ ...instance.state })
+      if (instance.state.pending && Date.now() - lastPost >= 360) {
+        lastPost = Date.now(); snapshot(instance, surface)
+      }
+    })
   }
   io.props = props
   // Pane.isFocused becomes false when the drawing-thread Client takes focus.
   // Keep the insertion point visible; the host owns Escape/focus transfer.
-  if (io.state.pending && props.ack >= io.state.pending.seq) {
+  if (io.state.pending && props.receipt?.id === io.state.pending.id) {
     const pending = io.state.pending
     io.state.pending = undefined
-    if (props.accepted) {
+    if (props.receipt.accepted) {
       io.state.history = [...io.state.history, pending.text].slice(-30)
       io.state.text = ''; io.state.cursor = 0; io.state.historyIndex = -1
     }
+    surface.setState({ ...io.state })
   }
   const instance = io
   const width = Math.max(8, (surface.columns || props.columns) - 3)
@@ -52,9 +62,9 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
   }
   instance.send = () => {
     const state = instance.state
-    if (!state.text.trim() || state.pending || props.busy && !/^\/(stop|close)\s*$/.test(state.text)) return
+    if (!state.text.trim() || state.pending || instance.props.busy && !/^\/(stop|close)\s*$/.test(state.text)) return
     state.seq++
-    state.pending = { seq: state.seq, text: state.text }
+    state.pending = { id: `${instance.props.epoch}:${state.instance}:${state.seq}`, text: state.text }
     redraw()
   }
   instance.menu = io.state.hiddenMenu ? [] : completions(io.state.text, props.commands, props.models, props.model)
@@ -63,6 +73,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     if (execute && item.execute) instance.send()
   }
   surface.onKey(key => {
+    key = normalizeKey(key) as typeof key
     const state = instance.state
     state.active = true
     if (state.pending) return
@@ -100,20 +111,24 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
   const start = Math.max(0, position.row - count + 1)
   const menuSize = Math.min(6, instance.menu.length)
   const menuStart = Math.max(0, Math.min(instance.menu.length - menuSize, state.selected - menuSize + 1))
+  const animation = props.activity ? activityFrame(props.activity, Date.now()) : null
+  const inputTop = animation ? 2 : 1
+  const menuTop = inputTop + count + 1
   surface.onPointer(event => {
     if (event.type !== 'down' || event.button !== 'left') return
     state.active = true
-    if (event.y >= 1 && event.y <= count) {
-      const line = lines[Math.min(lines.length - 1, start + event.y - 1)]
+    if (event.y >= inputTop && event.y < inputTop + count) {
+      const line = lines[Math.min(lines.length - 1, start + event.y - inputTop)]
       state.cursor = offsetAt(line, Math.max(0, event.x - 2)); state.preferredColumn = undefined
       redraw()
-    } else if (event.y >= count + 2 && event.y < count + 2 + menuSize) {
-      const item = instance.menu[menuStart + event.y - count - 2]
+    } else if (event.y >= menuTop && event.y < menuTop + menuSize) {
+      const item = instance.menu[menuStart + event.y - menuTop]
       if (item) choose(item, true)
     } else redraw()
   })
   const rule = '─'.repeat(width + 2)
   return <Box flexDirection="column" width={width + 3}>
+    {animation ? <Box height={1}><Text color="claude">{animation.glyph} {animation.label}…</Text><Text dimColor>{animation.seconds ? ` (${animation.seconds}s)` : ''}</Text></Box> : null}
     <Text dimColor>{rule}</Text>
     {lines.slice(start, start + count).map((line, index) => {
       const active = state.active && start + index === position.row
@@ -122,7 +137,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
       const after = line.glyphs.filter(g => g.start > state.cursor).map(g => g.text).join('')
       return <Box key={`line-${index}`} height={1}>
         <Text color={state.active ? 'claude' : undefined}>{index === 0 ? '❯ ' : '  '}</Text>
-        {!state.text && !active ? <Text dimColor>Click to type · / for commands</Text>
+        {!state.text && !active ? <Text dimColor>Ask anything…</Text>
           : active ? <Text>{before}<Text inverse>{cursorGlyph?.text ?? ' '}</Text>{after}</Text>
           : <Text>{line.glyphs.map(g => g.text).join('') || ' '}</Text>}
       </Box>
@@ -133,7 +148,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
         {menuStart + index === state.selected ? '› ' : '  '}{item.label} <Text dimColor>{item.description}</Text>
       </Text>
     </Box>)}
-    <Text dimColor wrap="truncate-end">{instance.menu.length ? `↑↓ choose · Tab complete · Enter select${instance.menu.length > menuSize ? ` · ${state.selected + 1}/${instance.menu.length}` : ''}` : state.pending ? 'Sending…' : `${props.busy ? 'Draft while Claude works' : 'Enter send'} · Shift+Enter newline${lines.length > count ? ` · ${position.row + 1}/${lines.length}` : ''}`}</Text>
+    {instance.menu.length > menuSize ? <Box justifyContent="flex-end"><Text dimColor>{state.selected + 1}/{instance.menu.length}</Text></Box> : null}
   </Box>
 }
 export default Composer

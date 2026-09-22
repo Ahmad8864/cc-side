@@ -1,5 +1,5 @@
 import { query, type PermissionResult, type SDKMessage, type SDKUserMessage, type Query } from '@anthropic-ai/claude-agent-sdk'
-import type { ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
+import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, modelLabel, parseCommand } from '../shared/commands.ts'
 
@@ -17,6 +17,7 @@ export class Conversation {
   private stopping = false
   private initializing: Promise<void>
   private controlling = false
+  private submissions = new Map<string, { text: string; result: Promise<void> }>()
 
   constructor(options: StartOptions, createQuery: typeof query = query) {
     this.state.context = options.resumeSessionAt ? 'inherited' : 'empty'
@@ -79,6 +80,21 @@ export class Conversation {
     }
   }
   private changed() { this.state.revision++ }
+  private activity(phase: Activity['phase']) {
+    this.state.activity = { phase, startedAt: this.state.activity?.startedAt ?? Date.now() }
+  }
+  submitOnce(id: string, text: string): Promise<void> {
+    const prior = this.submissions.get(id)
+    if (prior) {
+      if (prior.text !== text) return Promise.reject(new Error('A send identifier cannot be reused for another message'))
+      return prior.result
+    }
+    const result = Promise.resolve().then(() => this.submit(text))
+    this.submissions.set(id, { text, result })
+    // One active send is allowed. Keep a bounded replay window for lost replies.
+    if (this.submissions.size > 128) this.submissions.delete(this.submissions.keys().next().value!)
+    return result
+  }
   async submit(text: string) {
     const command = parseCommand(text)
     if (!command) { this.send(text); return }
@@ -94,14 +110,14 @@ export class Conversation {
         // Also accept provider model IDs, as the native CLI does.
         await this.run.setModel(chosen?.value ?? command.args)
         this.state.model = chosen?.resolvedModel ?? command.args
-        this.state.notice = `Model: ${modelLabel(this.state.model, this.state.models)}`
+        this.state.notice = undefined
         this.changed()
       } else if (command.name === 'effort') {
         if (command.args) {
           if (!['low', 'medium', 'high', 'xhigh', 'max', 'auto'].includes(command.args)) throw new Error('Choose low, medium, high, xhigh, max, or auto.')
           await this.run.applyFlagSettings({ effortLevel: command.args === 'auto' ? null : command.args as 'low' | 'medium' | 'high' | 'xhigh' | 'max' })
           this.state.effort = command.args
-          this.state.notice = `Effort: ${command.args}`
+          this.state.notice = undefined
           this.changed()
         } else this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort low, medium, high, xhigh, max, or auto.`)
       } else if (command.name === 'help') {
@@ -133,6 +149,7 @@ export class Conversation {
       : text
     if (!command) this.first = false
     this.state.status = 'working'
+    this.state.activity = { phase: 'requesting', startedAt: Date.now() }
     this.state.error = undefined
     this.state.notice = undefined
     this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.state.sessionId ?? '' })
@@ -148,6 +165,8 @@ export class Conversation {
   async stop() {
     if (this.state.status !== 'working' && this.state.status !== 'permission') return
     this.stopping = true
+    this.activity('stopping')
+    this.changed()
     try { await this.run.interrupt() }
     catch (error) { this.stopping = false; throw error }
   }
@@ -158,8 +177,10 @@ export class Conversation {
     this.input.close()
     this.run.close()
     this.state.status = 'closed'
+    this.state.activity = null
     this.state.messages = []
     this.blocks.clear()
+    this.submissions.clear()
     this.changed()
   }
   private async consume() {
@@ -208,16 +229,22 @@ export class Conversation {
       this.state.requests = []
       this.requestIndexes.clear()
       this.state.context = 'empty'
-      this.state.notice = 'Conversation cleared'
+      this.state.notice = undefined
+      this.state.activity = null
       this.first = true
+    } else if (message.type === 'system' && message.subtype === 'status') {
+      if (message.status === 'compacting') this.activity('compacting')
+      if (message.status === 'requesting') this.activity('requesting')
     } else if (message.type === 'stream_event' && !message.parent_tool_use_id) {
       const event = message.event
       if (event.type === 'message_start') this.currentMessage = event.message.id
       if (event.type === 'content_block_start') {
         const b = event.content_block
-        if (b.type === 'text') this.block(`${this.currentMessage}:${event.index}`, 'assistant').text = b.text
-        if (b.type === 'tool_use') this.block(b.id, 'tool', b.name)
+        if (b.type === 'thinking' || b.type === 'redacted_thinking') this.activity('thinking')
+        if (b.type === 'text') { this.activity('responding'); this.block(`${this.currentMessage}:${event.index}`, 'assistant').text = b.text }
+        if (b.type === 'tool_use') { this.activity('tool'); this.block(b.id, 'tool', b.name) }
       }
+      if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') this.activity('thinking')
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         this.block(`${this.currentMessage}:${event.index}`, 'assistant').text += event.delta.text
         this.state.textDeltas++
@@ -253,9 +280,10 @@ export class Conversation {
       }
     } else if (message.type === 'result') {
       this.state.usage = message.usage
+      this.state.activity = null
       this.state.status = message.is_error && !this.stopping ? 'error' : 'ready'
       if (this.stopping) {
-        this.state.notice = 'Stopped · ready for your next question'
+        this.state.notice = 'Stopped'
         this.state.error = undefined
         for (const block of this.blocks.values()) if (block.status === 'running') { block.status = 'cancelled'; block.text = 'Stopped by you.' }
         this.stopping = false

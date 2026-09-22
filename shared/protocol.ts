@@ -10,6 +10,12 @@ export type Usage = { input_tokens: number; output_tokens: number; cache_read_in
 export type Permission = { id: string; tool: string; input: Record<string, unknown> }
 export type SideCommand = { name: string; description: string; argumentHint: string; aliases?: string[] }
 export type SideModel = { value: string; resolvedModel?: string; displayName: string; description: string; supportedEffortLevels?: string[] }
+export type Activity = {
+  phase: 'requesting' | 'thinking' | 'responding' | 'tool' | 'compacting' | 'stopping'
+  startedAt: number
+}
+export type Submission = { id: string; text: string }
+export type Receipt = { id: string; accepted: boolean }
 export type ChatState = {
   revision: number
   status: 'starting' | 'ready' | 'working' | 'permission' | 'error' | 'closed'
@@ -28,6 +34,7 @@ export type ChatState = {
   cwd?: string
   commands?: SideCommand[]
   models?: SideModel[]
+  activity?: Activity | null
 }
 export type StartOptions = {
   parentSessionId: string

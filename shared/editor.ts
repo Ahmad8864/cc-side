@@ -5,6 +5,12 @@ export type Line = { start: number; end: number; glyphs: Glyph[]; width: number 
 export type Editor = { text: string; cursor: number; preferredColumn?: number }
 export type Key = { key: string; ctrl?: boolean; shift?: boolean; meta?: boolean }
 
+export function normalizeKey(key: Key): Key {
+  // Client reports physical Space by name, including enhanced terminal keys.
+  const names: Record<string, string> = { space: ' ', enter: 'return', esc: 'escape' }
+  return { ...key, key: names[key.key] ?? key.key }
+}
+
 export function glyphs(text: string): Glyph[] {
   const segments = typeof Intl !== 'undefined' && 'Segmenter' in Intl
     ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), s => s.segment)
@@ -64,6 +70,7 @@ export function cleanInput(text: string) {
   return text.replace(/\r\n?/g, '\n').replace(/\t/g, '  ').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
 }
 export function edit(state: Editor, key: Key, columns: number): Editor {
+  key = normalizeKey(key)
   const { text, cursor } = state
   const chars = glyphs(text)
   const previous = chars.findLast(g => g.start < cursor)?.start ?? 0

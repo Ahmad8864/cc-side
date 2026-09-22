@@ -32,8 +32,9 @@ def serve(directory):
     listener.settimeout(0.03)
     env = {**os.environ, 'CLAUDE_CODE_ENABLE_FUNCTION_HOOKS': '1',
            'CLAUDE_CODE_NO_FLICKER': '1', 'CC_SIDE_TRACE': str(directory / 'trace.json'),
-           'CC_SIDE_TEST': '1', 'TERM': 'xterm-256color'}
+           'CC_SIDE_TEST': '1', 'TERM': 'xterm-256color', 'FORCE_COLOR': '1'}
     env.pop('CLAUDECODE', None)
+    env.pop('NO_COLOR', None)
     version = subprocess.check_output([CLAUDE, '--version'], text=True).strip()
     (directory / 'runtime.json').write_text(json.dumps({'executable': CLAUDE, 'version': version}, indent=2))
     child = pexpect.spawn(CLAUDE, ['--plugin-dir', str(ROOT), '--strict-mcp-config',
@@ -50,7 +51,8 @@ def serve(directory):
         text = '\n'.join(screen.display)
         (directory / 'screen.txt').write_text(text)
         from PIL import Image, ImageDraw, ImageFont
-        font = ImageFont.truetype('/System/Library/Fonts/Menlo.ttc', 14)
+        font = ImageFont.truetype('/System/Library/Fonts/Menlo.ttc', 15)
+        bold = ImageFont.truetype('/System/Library/Fonts/Menlo.ttc', 15, index=1)
         img = Image.new('RGB', (screen.columns * 9, screen.lines * 19), '#141414')
         draw = ImageDraw.Draw(img)
         colors = {'default': '#ddd8d0', 'black': '#101010', 'red': '#f07178',
@@ -58,8 +60,12 @@ def serve(directory):
                   'magenta': '#c792ea', 'cyan': '#89ddff', 'white': '#eee'}
         for row, cells in screen.buffer.items():
             for col, cell in cells.items():
-                color = colors.get(cell.fg, '#' + cell.fg if len(cell.fg) == 6 else '#ddd8d0')
-                draw.text((col * 9, row * 19), cell.data, font=font, fill=color)
+                foreground = colors.get(cell.fg, '#' + cell.fg if len(cell.fg) == 6 else '#ddd8d0')
+                background = '#141414' if cell.bg == 'default' else colors.get(cell.bg, '#' + cell.bg if len(cell.bg) == 6 else '#141414')
+                if cell.reverse:
+                    foreground, background = background, foreground
+                draw.rectangle((col * 9, row * 19, (col + 1) * 9 - 1, (row + 1) * 19 - 1), fill=background)
+                draw.text((col * 9, row * 19), cell.data, font=bold if cell.bold else font, fill=foreground)
         img.save(directory / 'screen.png')
         return text
 

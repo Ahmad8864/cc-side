@@ -3,6 +3,7 @@ import type { Options, Query, SDKMessage, SDKUserMessage, query } from '@anthrop
 import { Conversation } from '../bridge/conversation.ts'
 import { AsyncQueue } from '../bridge/queue.ts'
 import type { StartOptions } from '../shared/protocol.ts'
+import { activityFrame } from '../shared/activity.ts'
 
 function harness(overrides: Partial<StartOptions> = {}) {
   let options!: Options
@@ -141,13 +142,48 @@ test('model and effort controls update only this process; unknown commands never
   await h.chat.submit('/model sonnet')
   expect(h.model()).toBe('sonnet')
   expect(h.chat.state.model).toBe('claude-sonnet-5')
+  expect(h.chat.state.notice).toBeUndefined()
   await h.chat.submit('/effort low')
   expect(h.settings()).toEqual({ effortLevel: 'low' })
   expect(h.chat.state.effort).toBe('low')
+  expect(h.chat.state.notice).toBeUndefined()
   await expect(h.chat.submit('/not-a-command')).rejects.toThrow('Unknown side command')
   expect(h.chat.state.messages).toHaveLength(0)
   expect(h.chat.state.requests).toHaveLength(0)
   h.chat.close()
+})
+
+test('retrying a send cannot enqueue it twice and a distinct send works after the reply', async () => {
+  const h = harness()
+  const first = h.chat.submitOnce('pane:first:1', 'First question')
+  expect(h.chat.submitOnce('pane:first:1', 'First question')).toBe(first)
+  await first
+  await h.chat.submitOnce('pane:first:1', 'First question')
+  expect(h.chat.state.messages).toHaveLength(1)
+  await expect(h.chat.submitOnce('pane:first:1', 'Changed question')).rejects.toThrow('cannot be reused')
+  h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  await h.chat.submitOnce('pane:remounted:1', 'Next question')
+  expect(h.chat.state.messages.map(m => m.text)).toEqual(['First question', 'Next question'])
+  h.chat.close()
+  await expect(h.chat.submitOnce('pane:closed:1', 'Too late')).rejects.toThrow('closed')
+})
+
+test('activity tracks SDK phases, animates with time, and clears after completion', () => {
+  const { chat } = harness()
+  chat.send('Question')
+  const startedAt = chat.state.activity!.startedAt
+  expect(chat.state.activity!.phase).toBe('requesting')
+  chat.accept(event({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: 'private' } } }))
+  expect(chat.state.activity).toEqual({ phase: 'thinking', startedAt })
+  expect(activityFrame(chat.state.activity!, startedAt).glyph).not.toBe(activityFrame(chat.state.activity!, startedAt + 120).glyph)
+  expect(chat.state.messages.map(m => m.text).join('')).not.toContain('private')
+  chat.accept(event({ type: 'stream_event', event: { type: 'content_block_start', index: 1, content_block: { type: 'text', text: 'Answer' } } }))
+  expect(chat.state.activity!.phase).toBe('responding')
+  chat.accept(event({ type: 'stream_event', event: { type: 'content_block_start', index: 2, content_block: { type: 'tool_use', id: 't', name: 'Read' } } }))
+  expect(chat.state.activity!.phase).toBe('tool')
+  chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  expect(chat.state.activity).toBeNull()
+  chat.close()
 })
 
 test('local command output is visible without counting as a model request, and clear resets the side history', async () => {

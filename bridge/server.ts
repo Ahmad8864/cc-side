@@ -28,8 +28,8 @@ async function main() {
         if (raw.length > 65536) return new Response('Too large', { status: 413 })
         const body = raw ? JSON.parse(raw) : {}
         if (path === '/send') {
-          if (typeof body.text !== 'string') throw new Error('Missing message')
-          await conversation.submit(body.text)
+          if (typeof body.text !== 'string' || typeof body.id !== 'string' || !/^[a-zA-Z0-9:_-]{1,160}$/.test(body.id)) throw new Error('Invalid message')
+          await conversation.submitOnce(body.id, body.text)
         } else if (path === '/permission') {
           if (typeof body.id !== 'string' || typeof body.allow !== 'boolean') throw new Error('Invalid decision')
           conversation?.decide(body.id, body.allow, body.answers)
