@@ -5,8 +5,13 @@ import { commandCatalog, completions, parseCommand } from '../shared/commands.ts
 test('long lines wrap without losing characters; hard newlines and an empty last line remain', () => {
   const text = 'a'.repeat(160) + '\nline two\n'
   const lines = layout(text, 40)
-  expect(lines.every(l => l.width <= 40)).toBe(true)
-  expect(lines.flatMap(l => l.glyphs).map(g => g.text).join('')).toBe(text.replaceAll('\n', ''))
+  expect(lines.every((l) => l.width <= 40)).toBe(true)
+  expect(
+    lines
+      .flatMap((l) => l.glyphs)
+      .map((g) => g.text)
+      .join(''),
+  ).toBe(text.replaceAll('\n', ''))
   expect(lines.at(-1)?.start).toBe(text.length)
   expect(caret(lines, text.length)).toEqual({ row: 5, column: 0 })
 })
@@ -30,7 +35,7 @@ test('cursor movement and deletion preserve emoji, combining marks, and wide cha
   s = edit(s, { key: 'left' }, 5)
   s = edit(s, { key: 'backspace' }, 5)
   expect(s.text).toBe('ae\u0301')
-  expect(layout(text, 4).every(line => line.width <= 4)).toBe(true)
+  expect(layout(text, 4).every((line) => line.width <= 4)).toBe(true)
 })
 
 test('up/down keep visual column across soft wraps; pasted CRLF and tabs are normalized', () => {
@@ -39,30 +44,52 @@ test('up/down keep visual column across soft wraps; pasted CRLF and tabs are nor
   expect(s.cursor).toBe(8)
   s = edit(s, { key: 'down' }, 5)
   expect(s.cursor).toBe(13)
-  expect(edit({ text: '', cursor: 0 }, { key: 'alpha\r\nbeta\tend' }, 40).text).toBe('alpha\nbeta  end')
+  expect(edit({ text: '', cursor: 0 }, { key: 'alpha\r\nbeta\tend' }, 40).text).toBe(
+    'alpha\nbeta  end',
+  )
 })
 
 test('wide characters at a word-wrap boundary fit, and Home before a leading newline stays at zero', () => {
-  expect(layout(' aaaaaaaaa界', 10).every(line => line.width <= 10)).toBe(true)
+  expect(layout(' aaaaaaaaa界', 10).every((line) => line.width <= 10)).toBe(true)
   const state = { text: '\nnext', cursor: 0 }
   expect(edit(state, { key: 'home' }, 10)).toEqual(state)
   expect(edit(state, { key: 'u', ctrl: true }, 10)).toEqual(state)
 })
 
 test('commands keep arguments intact and discover runtime skills plus side controls', () => {
-  const commands = commandCatalog([{ name: 'review', description: 'Review files', argumentHint: '[files]' }])
-  expect(parseCommand('/review first.ts\nsecond.ts')).toEqual({ name: 'review', args: 'first.ts\nsecond.ts' })
+  const commands = commandCatalog([
+    { name: 'review', description: 'Review files', argumentHint: '[files]' },
+  ])
+  expect(parseCommand('/review first.ts\nsecond.ts')).toEqual({
+    name: 'review',
+    args: 'first.ts\nsecond.ts',
+  })
   expect(completions('/rev', commands, [])[0].value).toBe('/review ')
-  expect(completions('/model ', commands, [{ value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5' }])[0]).toMatchObject({ value: '/model sonnet', execute: true })
+  expect(
+    completions('/model ', commands, [
+      { value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5' },
+    ])[0],
+  ).toMatchObject({ value: '/model sonnet', execute: true })
   expect(completions('text /model', commands, [])).toEqual([])
 })
 
 test('model and effort pickers handle mixed-case command names without switching commands', () => {
-  const models = [{ value: 'haiku', displayName: 'Haiku', description: 'Haiku 4', supportedEffortLevels: ['low', 'high'] }]
+  const models = [
+    {
+      value: 'haiku',
+      displayName: 'Haiku',
+      description: 'Haiku 4',
+      supportedEffortLevels: ['low', 'high'],
+    },
+  ]
   for (const name of ['model', 'MODEL', 'Model']) {
-    expect(completions(`/${name} `, [], models).map(c => c.value)).toEqual(['/model haiku'])
+    expect(completions(`/${name} `, [], models).map((c) => c.value)).toEqual(['/model haiku'])
   }
   for (const name of ['effort', 'EFFORT', 'Effort']) {
-    expect(completions(`/${name} `, [], models, 'haiku').map(c => c.value)).toEqual(['/effort low', '/effort high', '/effort auto'])
+    expect(completions(`/${name} `, [], models, 'haiku').map((c) => c.value)).toEqual([
+      '/effort low',
+      '/effort high',
+      '/effort auto',
+    ])
   }
 })

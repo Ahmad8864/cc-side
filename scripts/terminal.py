@@ -14,7 +14,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CLAUDE = '/opt/homebrew/bin/claude'
+CLAUDE = str(ROOT / 'scripts/claude.sh')
 
 
 def serve(directory):

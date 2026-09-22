@@ -5,8 +5,11 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   private ended = false
   push(value: T) {
     if (this.ended) throw new Error('Conversation is closed')
-    if (this.waiter) { const resolve = this.waiter; this.waiter = undefined; resolve({ value, done: false }) }
-    else this.values.push(value)
+    if (this.waiter) {
+      const resolve = this.waiter
+      this.waiter = undefined
+      resolve({ value, done: false })
+    } else this.values.push(value)
   }
   close() {
     this.ended = true
@@ -15,10 +18,14 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
     this.waiter = undefined
   }
   [Symbol.asyncIterator](): AsyncIterator<T> {
-    return { next: () => {
-      if (this.values.length) return Promise.resolve({ value: this.values.shift()!, done: false })
-      if (this.ended) return Promise.resolve({ value: undefined, done: true })
-      return new Promise(resolve => { this.waiter = resolve })
-    } }
+    return {
+      next: () => {
+        if (this.values.length) return Promise.resolve({ value: this.values.shift()!, done: false })
+        if (this.ended) return Promise.resolve({ value: undefined, done: true })
+        return new Promise((resolve) => {
+          this.waiter = resolve
+        })
+      },
+    }
   }
 }

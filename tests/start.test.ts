@@ -1,0 +1,36 @@
+import { expect, test } from 'bun:test'
+import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+test('the helper starts from a checkout path containing spaces', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'cc-side test '))
+  try {
+    await copyFile(
+      fileURLToPath(new URL('../bridge/start.ts', import.meta.url).href),
+      join(directory, 'start.ts'),
+    )
+    await writeFile(
+      join(directory, 'server.ts'),
+      `await Bun.stdin.text(); console.log(JSON.stringify({ error: 'Test helper reached' }));`,
+    )
+    const child = Bun.spawn([process.execPath, join(directory, 'start.ts')], {
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    child.stdin.write('{}')
+    child.stdin.end()
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ])
+    expect(code).toBe(0)
+    expect(stderr).toBe('')
+    expect(JSON.parse(stdout)).toEqual({ error: 'Test helper reached' })
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

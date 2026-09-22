@@ -6,10 +6,26 @@ export type ChatMessage = {
   toolInput?: string
   status?: 'running' | 'done' | 'error' | 'cancelled'
 }
-export type Usage = { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
+export type Usage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+}
 export type Permission = { id: string; tool: string; input: Record<string, unknown> }
-export type SideCommand = { name: string; description: string; argumentHint: string; aliases?: string[] }
-export type SideModel = { value: string; resolvedModel?: string; displayName: string; description: string; supportedEffortLevels?: string[] }
+export type SideCommand = {
+  name: string
+  description: string
+  argumentHint: string
+  aliases?: string[]
+}
+export type SideModel = {
+  value: string
+  resolvedModel?: string
+  displayName: string
+  description: string
+  supportedEffortLevels?: string[]
+}
 export type Activity = {
   phase: 'requesting' | 'thinking' | 'responding' | 'tool' | 'compacting' | 'stopping'
   startedAt: number

@@ -50,12 +50,20 @@ def state():
     return next((e['data'] for e in reversed(events()) if e['kind'] == 'side.state'), {})
 
 
+def divider(text):
+    return next((line.index('│') for line in text.splitlines() if '│' in line), len(text.splitlines()[0]))
+
+
 def side():
-    return '\n'.join(line[101:] for line in call().splitlines())
+    text = call()
+    start = divider(text) + 1
+    return '\n'.join(line[start:] for line in text.splitlines())
 
 
 def click(needle):
-    matches = [(row, line.rfind(needle)) for row, line in enumerate(call().splitlines()) if needle in line[101:]]
+    text = call()
+    start = divider(text) + 1
+    matches = [(row, line.rfind(needle)) for row, line in enumerate(text.splitlines()) if needle in line[start:]]
     assert matches, f'No side control: {needle}'
     row, col = matches[-1]
     key(f'\x1b[<0;{col+1};{row+1}M\x1b[<0;{col+1};{row+1}m')

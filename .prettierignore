@@ -1,0 +1,4 @@
+node_modules/
+work/
+types/claude-code.d.ts
+bun.lock
