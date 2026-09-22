@@ -13,11 +13,13 @@ function nodes(value: unknown): Tree[] {
 
 // Exercise the real pane hooks, including Button callbacks. The host can hide
 // a pane without echoing ui.close back to the caller; hiding is not disposal.
-async function harness() {
+async function harness(initialStatus: ChatState['status'] = 'ready') {
   const handlers = new Map<string, (...args: any[]) => any>()
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
   let starts = 0, hidden = false, failSend = false
   const requests: { path: string; body: any; url: string }[] = []
+  const opens: any[] = []
+  let prompt = ''
   let state: ChatState
   const $ = {
     env: { get: async () => undefined },
@@ -25,7 +27,7 @@ async function harness() {
     plugin: { root: '/plugin' },
     process: { run: async () => {
       starts++
-      state = { revision: 1, status: 'ready', model: 'sonnet', messages: [], permissions: [], requests: [], textDeltas: 0 }
+      state = { revision: 1, status: initialStatus, model: 'sonnet', messages: [], permissions: [], requests: [], textDeltas: 0 }
       return { exitCode: 0, stdout: JSON.stringify({ url: `http://test/${starts}`, token: 'test', pid: starts }) }
     } },
     http: { fetch: async (url: string, init: any) => {
@@ -40,26 +42,31 @@ async function harness() {
       return { ok: true, text: JSON.stringify(state) }
     } },
     ui: {
-      invalidate() {}, scroll: async () => {}, open: async () => { hidden = false },
+      invalidate() {}, scroll: async () => {}, open: async (args: any) => { hidden = false; opens.push(args) },
       close: async () => { hidden = true },
       resolve: async () => Object.fromEntries(['Box', 'Text', 'Markdown', 'Input', 'Button', 'Client'].map(name => [name, name])),
     },
     clock: { after() {} }, fs: { write: async () => {} }, command: { register: async () => {} },
+    prompt: {
+      read: async () => ({ text: prompt, cursor: prompt.length }),
+      fill: async ({ text }: { text: string }) => { prompt = text; return { isFilled: true } },
+    },
   }
   const invoke = (name: string, e: any) => handlers.get(name)!($, e, async () => ({}))
   await invoke('session.start', { isInteractive: true, cwd: '/project' })
   const command = async (args = '') => {
-    await invoke('command.run', { args, presentation: { isFullscreen: true, columns: 180 } })
+    const result = await invoke('command.run', { args, presentation: { isFullscreen: true, columns: 180 } })
     await Promise.resolve()
+    return result
   }
-  const render = async () => nodes(await invoke('ui.render', { requestId: 'side', surface: 'terminal', props: { bodyColumns: 78, scroll: { bodyRows: 40 } } }))
+  const render = async (columns = 180, bodyColumns = 78) => nodes(await invoke('ui.render', { requestId: 'side', surface: 'terminal', viewport: { columns: columns - bodyColumns - 1, rows: 48, isFullscreen: true }, props: { placement: 'dock', bodyColumns, scroll: { bodyRows: 40 } } }))
   const editor = async () => (await render()).find(n => n.tag === 'Client')!
   const submit = async (instance: string, seq: number, text: string) => {
     const client = await editor(), epoch = client.props.props.epoch
     return invoke('ui.message', { requestId: 'side', element: client.props.key,
       data: { epoch, instance, seq, text, submit: { id: `${epoch}:${instance}:${seq}`, text } } })
   }
-  return { invoke, command, render, editor, submit, requests, starts: () => starts, hidden: () => hidden, failNext: () => { failSend = true } }
+  return { invoke, command, render, editor, submit, requests, opens, prompt: () => prompt, setPrompt: (text: string) => { prompt = text }, starts: () => starts, hidden: () => hidden, failNext: () => { failSend = true } }
 }
 
 test('Close button discards the conversation and draft before reopening a fresh helper', async () => {
@@ -108,4 +115,49 @@ test('native X, /close, and /side close all discard the side helper', async () =
   await h.command('close')
   expect(h.starts()).toBe(3)
   expect(h.requests.filter(r => r.path === '/close')).toHaveLength(3)
+})
+
+for (const status of ['working', 'permission'] as const) {
+  test(`/side preserves a rejected question while ${status} without sending or replacing the side draft`, async () => {
+    const h = await harness(status); await h.command()
+    const before = await h.editor()
+    await h.invoke('ui.message', { requestId: 'side', element: before.props.key,
+      data: { epoch: before.props.props.epoch, instance: 'first', seq: 1, text: 'Existing side draft' } })
+    const result = await h.command('Second question')
+    expect(h.requests.filter(r => r.path === '/send')).toHaveLength(0)
+    expect(h.prompt()).toBe('/side Second question')
+    expect(result.text).toContain('busy')
+    expect((await h.editor()).props.props.seed).toBe('Existing side draft')
+  })
+}
+
+test('a rejected command preserves newer main-prompt text and displays the unsent question', async () => {
+  const h = await harness('working'); await h.command()
+  h.setPrompt('New main draft')
+  const result = await h.command('Unsent question')
+  expect(h.prompt()).toBe('New main draft')
+  expect(result.text).toContain('Unsent question')
+})
+
+test('a command request failure restores its argument for retry', async () => {
+  const h = await harness(); await h.command(); h.failNext()
+  const result = await h.command('Retry this question')
+  expect(h.prompt()).toBe('/side Retry this question')
+  expect(result.text).toContain('Temporary failure')
+})
+
+test('terminal resize updates the existing pane once, without focus or conversation reset', async () => {
+  const h = await harness(); await h.command()
+  await h.submit('first', 1, 'Keep this conversation')
+  const before = await h.editor()
+  await h.render(120)
+  expect(h.opens.at(-1)).toEqual({ id: 'side', title: 'Side chat', columns: 52 })
+  const calls = h.opens.length
+  // Further renders and a user-adjusted pane width do not undo a manual resize.
+  const after = await h.render(120, 60)
+  expect(h.opens).toHaveLength(calls)
+  expect(h.starts()).toBe(1)
+  expect(after.find(n => n.tag === 'Client')!.props.key).toBe(before.props.key)
+  expect(JSON.stringify(after)).toContain('Keep this conversation')
+  expect(h.requests.some(r => r.path === '/close')).toBe(false)
 })

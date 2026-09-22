@@ -31,7 +31,7 @@ export function completions(text: string, commands: SideCommand[], models: SideM
   const match = /^\/(model|effort)\s+(.*)$/i.exec(text)
   if (match) {
     const query = match[2].toLowerCase()
-    if (match[1] === 'model') return models.filter(m => `${m.value} ${m.displayName} ${m.description}`.toLowerCase().includes(query))
+    if (match[1].toLowerCase() === 'model') return models.filter(m => `${m.value} ${m.displayName} ${m.description}`.toLowerCase().includes(query))
       .map(m => ({ value: `/model ${m.value}`, label: m.displayName, description: m.description, execute: true }))
     const levels = models.find(m => m.value === model || m.resolvedModel === model)?.supportedEffortLevels ?? ['low', 'medium', 'high', 'xhigh', 'max']
     return [...levels, 'auto'].filter(level => level.startsWith(query))

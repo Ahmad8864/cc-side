@@ -1,6 +1,6 @@
 {
   "name": "cc-side",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A separate agent conversation in Claude Code's right-hand pane, forked from the current context.",
   "author": { "name": "Ahmad" },
   "keywords": ["side-chat", "function-hooks"]

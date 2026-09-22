@@ -6,6 +6,7 @@ import { layout } from '../shared/editor.ts'
 import type { ComposerProps } from './composer.tsx'
 
 const PANE = 'side'
+const paneColumns = (columns: number) => Math.max(45, Math.floor(columns * 0.44))
 const empty = (): ChatState => ({ revision: -1, status: 'starting', messages: [], permissions: [], requests: [], textDeltas: 0 })
 
 export const register: Register = on => {
@@ -38,6 +39,7 @@ export const register: Register = on => {
   let commandSequence = 0
   let composerColumns = 70
   let composerRows = 40
+  let viewportColumns = 0
   const expanded = new Set<string>()
   const composerProps = (): ComposerProps => ({
     epoch: generation, seed: draft, receipt,
@@ -144,6 +146,7 @@ export const register: Register = on => {
     receipts.clear()
     pendingSubmissions.clear()
     expanded.clear()
+    viewportColumns = 0
     host.invalidate()
     if (old) {
       try { await host.request(old, '/close') }
@@ -214,16 +217,42 @@ export const register: Register = on => {
       return { text: 'Side chat needs fullscreen rendering and a terminal at least 110 columns wide. Enable fullscreen with /tui, then run /side.' }
     }
     opened = true
-    await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: Math.max(45, Math.floor(e.presentation.columns * 0.44)) })
+    viewportColumns = e.presentation.columns
+    await $.ui.open({ id: PANE, title: 'Side chat', focus: true, columns: paneColumns(viewportColumns) })
     if (!endpoint) await connect()
     if (arg) {
-      if (endpoint) await send(arg)
-      else draft = arg
+      const epoch = generation
+      const busy = sending || state.status === 'working' || state.status === 'permission'
+      const accepted = endpoint && await send(arg)
+      if (!accepted && epoch === generation && opened) {
+        const reason = busy ? 'Side chat is busy. Wait for the reply or stop it, then retry.'
+          : localError || 'Side chat is not ready yet. Retry once it is connected.'
+        // Put the rejected command back where it was entered. Never replace
+        // another draft, including text typed while the request was in flight.
+        let restored = false
+        try {
+          const prompt = await $.prompt.read()
+          if (!prompt.text) restored = (await $.prompt.fill({ text: `/side ${arg}`, mode: 'insert' })).isFilled
+        } catch { /* The visible response below still preserves the question. */ }
+        return { text: restored ? `${reason} Your question is back in the prompt.` : `${reason}\n\nNot sent:\n${arg}` }
+      }
     }
     return {}
   })
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE || !opened || e.surface !== 'terminal') return next(e)
+    // In a docked Pane, viewport.columns is the MAIN transcript's width.
+    // Add this pane and the one-cell divider to recover the terminal width.
+    const terminalColumns = e.viewport && e.viewport.columns + (e.props.placement === 'dock' ? e.props.bodyColumns + 1 : 0)
+    if (terminalColumns && terminalColumns !== viewportColumns) {
+      viewportColumns = terminalColumns
+      if (e.viewport?.isFullscreen && viewportColumns >= 110) {
+        // Updating this pane preserves its session and editor. Omit focus so a
+        // window resize does not take the keyboard from either conversation.
+        await $.ui.open({ id: PANE, title: 'Side chat', columns: paneColumns(viewportColumns) })
+        trace('side.resized', { columns: viewportColumns, requested: paneColumns(viewportColumns) })
+      }
+    }
     const { Box, Text, Markdown, Input, Button, Client } = await $.ui.resolve(e)
     const busy = sending || state.status === 'working' || state.status === 'permission'
     const columns = e.props.bodyColumns - 2

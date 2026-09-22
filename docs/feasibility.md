@@ -75,9 +75,11 @@ The stock Mods `Input` is documented as a one-line field. A live probe showed th
 
 In 2.1.280, a separate bracketed-paste probe entered `PASTE_PROBE` in the main prompt after the side Client had been clicked; no model request was sent. The Client contract exposes key and pointer listeners but no paste or focus-loss listener. Main-prompt interception based on the last Client click would risk routing intentional main-chat input into the side. Paste routing is therefore an explicit upstream gap, alongside autofocus; the physical-key regressions do not establish paste parity.
 
+The 0.2.2 QA fixes preserve rejected `/side <question>` commands in the main prompt without replacing the side draft, correct mixed-case model/effort pickers, and update the existing pane on terminal resize. Live checks on 2.1.280 covered an invalid command, a busy question followed by Stop and successful retry, and a 180 → 120 → 180-column resize with the same helper and draft. At 120 columns the main transcript retained 67 columns. A pre-existing native `pluginPanes.dockColumns: 81` preference initially overrode requests; that one local preference was cleared before restarting the validation session. The plugin itself never edits this setting, and manual widths still take precedence. The render event reports the main transcript width, so the mod adds the pane and divider to recover total width. See `docs/evidence/qa-fixes-validation.json`; transitions below the 110-column minimum were not tested.
+
 1. Establish an upstream-supported way to reuse the parent's full request configuration in a streaming, non-persistent fork, or obtain streaming and persistence control for native Mods agent forks. This is the highest-value improvement.
 2. Prove full tool/settings parity, including CLI-supplied MCP servers, dynamic plugins, transient approvals, and non-default permission modes.
-3. Add bounded/virtualized history rendering and exercise large contexts, compaction, attachments, terminal resizing, reconnects, and background-agent lifecycles.
+3. Add bounded/virtualized history rendering and exercise large contexts, compaction, attachments, narrower terminal layouts, reconnects, and background-agent lifecycles.
 4. Revalidate against a supported release of the evolving Mods API before distributing broadly.
 
 The prototype is ready for hands-on UX iteration. It does not establish that every requirement, especially parent-cache preservation and arbitrary tool lifecycle parity, is production-ready.

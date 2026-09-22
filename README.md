@@ -24,6 +24,7 @@ cd /path/to/your/project
 ```
 
 - Click the side composer to type. Long text wraps; Shift+Enter (or Alt+Enter where the terminal reports it) adds a newline. Enter sends. The draft grows up to eight rows and scrolls to keep the insertion point visible.
+- If `/side your question` cannot send, it restores the command to the main prompt for retry. An existing side draft or newer main draft is preserved; if main already contains text, the command response shows the unsent question instead. Questions are never queued silently.
 - Type `/` for commands and project skills discovered from the side process. Use ↑/↓ to select, Tab to complete, or Enter to run. `/model ` and `/effort ` open pickers. Model and effort changes apply to this side process only.
 - `/help`, `/context`, `/clear`, `/compact`, `/usage` (including `/cost` and `/stats` aliases), and discovered skills use the side conversation. Unknown commands show an error and keep the draft. Claude's own commands retain their normal behavior; terminal-only dialogs are not reproduced by the mod.
 - The active model appears once in the header. A Claude-style animated indicator above the composer follows the side agent's Working, Thinking, Compacting, and Stopping phases. Idle has no status line. Click a tool row to expand its input and result.
@@ -31,6 +32,7 @@ cd /path/to/your/project
 - Tool permission buttons and `AskUserQuestion` answers appear inside the pane. Tab or the mouse selects actions.
 - Stop interrupts the current turn. Close, the corner ×, `/close`, or `/side close` discards the side conversation and draft and stops its process. Opening `/side` again starts a fresh side chat from the current main context. Escape only returns focus to main; it keeps the side chat open.
 - `/side stats` reports model requests, cache read/write tokens, and streamed text deltas. It does not send those statistics to the model.
+- The pane adjusts when the terminal resizes, preserving the conversation and draft. Claude's saved manual pane width takes precedence over the mod's width request. If you previously dragged the divider, that native preference can keep the pane at a fixed width.
 
 ## What has been established
 
@@ -78,5 +80,7 @@ work/venv/bin/python scripts/terminal.py quit work/my-test
 The harness records text, a rendered terminal capture, and state transitions under ignored `work/`. `CC_SIDE_TRACE` contains conversation contents; leave it unset in normal use. `CC_SIDE_TEST=1` isolates test settings and MCP configuration; the regular launcher does not enable either test option.
 
 For the Space/send/close regressions, start a new synthetic PTY, then run `work/venv/bin/python scripts/polish.py work/my-test`. It tests individual physical key sequences, failed-command recovery, consecutive sends without refocusing, animated activity, and destructive close/reopen. It consumes two short model turns. Finish with the `quit` command above. See `docs/evidence/polish-validation.json` for the recorded scope.
+
+The 0.2.2 QA fixes additionally verified mixed-case model selection, rejected-question restoration, Stop followed by retry, and resizing from 180 to 120 columns without losing the draft or restarting the side process. See `docs/evidence/qa-fixes-validation.json`. Restart `bun run dev` after updating the mod.
 
 `experiments/native-fork.tsx` preserves the earlier cache-efficient native-fork experiment. It is not loaded by this plugin. Its limitations are documented rather than hidden behind an automatic backend switch.

@@ -1,0 +1,43 @@
+{
+  "runtime": "Homebrew Claude Code 2.1.280",
+  "date": "2026-09-22",
+  "ui_version": "0.2.2",
+  "real_pty_checks": [
+    "Uppercase /MODEL opens model choices and selects Haiku",
+    "Resize 180x48 to 120x32 and back preserves the side draft and existing helper",
+    "Typing after resize stays in the side without refocusing",
+    "At 120 columns the main transcript has 67 columns and the pane body has 52",
+    "Unknown /side command restores an editable main prompt without changing the side draft",
+    "A /side question rejected during a real busy turn is restored and not submitted to the child",
+    "Stop followed by retry sends the restored question and receives RETRY_READY",
+    "Four test helpers and their four parent Claude processes were verified exited"
+  ],
+  "model_requests": {
+    "count": 2,
+    "model": "Haiku"
+  },
+  "checks": {
+    "unit_tests": 39,
+    "assertions": 158,
+    "typecheck": "passed",
+    "mod_validator": "passed",
+    "diff_check": "passed"
+  },
+  "configuration": {
+    "native_manual_width": "The pre-existing pluginPanes.dockColumns value 81 was cleared locally before restarting the successful PTY. No other preference was changed.",
+    "plugin_behavior": "The plugin does not edit native preferences. Saved manual widths still override requested width.",
+    "resize_contract": "Docked viewport.columns is the main transcript width; pane bodyColumns plus the one-cell divider recover terminal width."
+  },
+  "limits": [
+    "Captures render real PTY cells; they are not native Ghostty screenshots",
+    "Transitions below the 110-column minimum were not tested",
+    "Busy permission rejection and preservation of newer main-prompt text have hook-test coverage; the live busy test used a working turn",
+    "Bracketed paste, Client autofocus, and focus-loss notification remain unresolved upstream gaps",
+    "These runs are not a new cache benchmark; parent cache reuse remains unresolved"
+  ],
+  "captures": [
+    "qa-resize.png",
+    "qa-retry.png"
+  ],
+  "local_trace_directory": "work/fix-qa-auto"
+}
