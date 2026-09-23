@@ -484,7 +484,7 @@ export class SideChat {
   }
 }
 
-// Posts are input from code, not facts: accept only the shape the composer sends.
+// Composer posts arrive untyped: accept only the shape the composer sends.
 function isPost(data: unknown, generation: number): data is ComposerPost {
   const post = data as Partial<ComposerPost> | null
   return (
