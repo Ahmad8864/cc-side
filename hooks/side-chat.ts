@@ -7,6 +7,7 @@ import type {
   Submission,
 } from '../shared/protocol.ts'
 import { localCommands } from '../shared/commands.ts'
+import { errorMessage } from '../shared/errors.ts'
 import { effortLevels } from '../shared/models.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
@@ -49,8 +50,6 @@ const empty = (): ChatState => ({
   requests: [],
   textDeltas: 0,
 })
-
-const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 /** The pane's side chat: its helper, sends and their receipts, and what the pane shows. */
 export class SideChat {
@@ -182,7 +181,7 @@ export class SideChat {
         try {
           accepted = await pending
         } catch (error) {
-          if (generation === this.generation) this.localError = String(error)
+          if (generation === this.generation) this.localError = errorMessage(error)
         }
         if (generation !== this.generation) return {}
         this.pendingSubmissions.delete(submission.id)
@@ -299,7 +298,7 @@ export class SideChat {
       try {
         await this.host.request(old, '/close')
       } catch (error) {
-        this.trace('side.close-error', String(error))
+        this.trace('side.close-error', errorMessage(error))
       }
     }
     this.trace('side.closed', {})
@@ -351,7 +350,7 @@ export class SideChat {
         })
         return
       }
-      this.localError = `Side process disconnected. Close and reopen /side. ${String(error)}`
+      this.localError = `Side process disconnected. Close and reopen /side. ${errorMessage(error)}`
       this.host.invalidate()
       return
     }
@@ -369,7 +368,7 @@ export class SideChat {
         this.update(result)
       return connection === this.connection
     } catch (error) {
-      if (connection === this.connection) this.localError = String(error)
+      if (connection === this.connection) this.localError = errorMessage(error)
       return false
     } finally {
       if (connection === this.connection) this.host.invalidate()

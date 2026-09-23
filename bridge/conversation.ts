@@ -20,6 +20,7 @@ import { AsyncQueue } from './queue.ts'
 import { commandCatalog, parseCommand } from '../shared/commands.ts'
 import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { toolOutput } from './tool-output.ts'
+import { errorMessage } from '../shared/errors.ts'
 import { editStarts } from './edit-starts.ts'
 import { sdkOptions } from './sdk-options.ts'
 import { earlierDiscussion, editingNote, editingOff, sideInstruction } from './instructions.ts'
@@ -161,7 +162,7 @@ export class Conversation {
     } catch (error) {
       if (!this.closed) {
         this.state.status = 'error'
-        this.state.error = String(error)
+        this.state.error = errorMessage(error)
         this.changed()
       }
     }
@@ -381,7 +382,7 @@ export class Conversation {
       this.ended = true
       if (!this.closed) {
         this.state.status = 'error'
-        this.state.error = String(error)
+        this.state.error = errorMessage(error)
         this.changed()
       }
     }

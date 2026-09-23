@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Conversation } from './conversation.ts'
 import { prepareStart } from './prepare.ts'
+import { errorMessage } from '../shared/errors.ts'
 
 let activeConversation: Conversation | undefined
 async function main() {
@@ -51,10 +52,7 @@ async function main() {
         else return new Response('Not found', { status: 404 })
         return Response.json(conversation.state)
       } catch (error) {
-        return Response.json(
-          { error: error instanceof Error ? error.message : String(error) },
-          { status: 400 },
-        )
+        return Response.json({ error: errorMessage(error) }, { status: 400 })
       }
     },
   })
@@ -98,9 +96,7 @@ export async function serve() {
   } catch (error) {
     activeConversation?.close()
     // Startup errors are protocol data, not Bun source excerpts in the chat UI.
-    process.stdout.write(
-      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) + '\n',
-    )
+    process.stdout.write(JSON.stringify({ error: errorMessage(error) }) + '\n')
     process.exitCode = 1
   }
 }

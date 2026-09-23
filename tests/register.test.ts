@@ -23,7 +23,7 @@ async function harness({
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
   let starts = 0,
     hidden = false,
-    failSend = false,
+    failing: string | undefined,
     failedPolls = 0
   const requests: { path: string; body: any; url: string }[] = []
   const opens: any[] = []
@@ -80,11 +80,11 @@ async function harness({
           failedPolls--
           throw new Error('Connection refused')
         }
+        if (path === failing) {
+          failing = undefined
+          return { ok: false, text: JSON.stringify({ error: 'Temporary failure' }) }
+        }
         if (path === '/send') {
-          if (failSend) {
-            failSend = false
-            return { ok: false, text: JSON.stringify({ error: 'Temporary failure' }) }
-          }
           state.messages.push({ id: body.id, role: 'user', text: body.text })
           state.revision++
         }
@@ -193,8 +193,8 @@ async function harness({
     stored,
     starts: () => starts,
     hidden: () => hidden,
-    failNext: () => {
-      failSend = true
+    failNext: (path = '/send') => {
+      failing = path
     },
     failPolls: (count: number) => {
       failedPolls = count
@@ -411,6 +411,19 @@ test('questions mark picked options, send on Enter once answered, and can be ski
     allow: true,
     answers: { 'Which color?': 'Teal' },
   })
+})
+
+test('a failed action shows its message without an Error prefix', async () => {
+  const h = await harness({
+    status: 'permission',
+    permissions: [{ id: 'tool', tool: 'Bash', input: { command: 'make' } }],
+  })
+  await h.command()
+  h.failNext('/permission')
+  await (await h.render()).find((n) => n.props.key === 'allow-tool')!.props.onPress()
+  const tree = JSON.stringify(await h.render())
+  expect(tree).toContain('Temporary failure')
+  expect(tree).not.toContain('Error: Temporary failure')
 })
 
 test('tool permission controls send the explicit allow or deny decision', async () => {
