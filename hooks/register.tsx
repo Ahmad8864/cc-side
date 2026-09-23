@@ -7,6 +7,7 @@ import type {
   StartupResult,
 } from '../shared/protocol.ts'
 import { effortLevels } from '../shared/models.ts'
+import { helperFile, helperFor, targetOf } from '../shared/targets.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 
@@ -20,10 +21,8 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     if (!e.isInteractive || (await $.env.get('CC_SIDE_WORKER'))) return result
-    const bun = await $.env.get('CC_SIDE_BUN')
-    const helper = bun ? [bun, `${$.plugin.root}/bridge/main.ts`] : [`${$.plugin.root}/bin/cc-side`]
     chat.host = {
-      ...createBridgeClient($, helper),
+      ...createBridgeClient($),
       write: (path, text) => $.fs.write(path, text),
       invalidate: () => {
         $.ui.invalidate('ui.render')
@@ -189,7 +188,8 @@ export const register: Register = (on) => {
 }
 
 // Mods requires engine calls to stay in the registered hook module.
-function createBridgeClient($: EngineInterface, helper: string[]) {
+function createBridgeClient($: EngineInterface) {
+  let helper: string[] | undefined
   return {
     async options(choices: StartChoices): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
@@ -206,12 +206,13 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
     },
 
     async start(options: StartOptions): Promise<Endpoint> {
-      const result = await $.process.run(helper, {
-        stdin: JSON.stringify(options),
-        timeoutMs: 15000,
-      })
+      helper ??= await helperCommand($)
       let startup: StartupResult
       try {
+        const result = await $.process.run(helper, {
+          stdin: JSON.stringify(options),
+          timeoutMs: 15000,
+        })
         startup = JSON.parse(result.stdout)
       } catch {
         throw new Error(
@@ -243,4 +244,18 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
       return JSON.parse(response.text)
     },
   }
+}
+
+// The standalone helper for this computer, or Bun running the source in development.
+async function helperCommand($: EngineInterface) {
+  const bun = await $.env.get('CC_SIDE_BUN')
+  if (bun) return [bun, `${$.plugin.root}/bridge/main.ts`]
+  const system = await $.env.get('OS')
+  const target =
+    system === 'Windows_NT'
+      ? targetOf(system, await $.env.get('PROCESSOR_ARCHITECTURE'))
+      : targetOf(...(await $.process.run(['uname', '-sm'])).stdout.trim().split(/\s+/))
+  const helper = helperFor(target)
+  if (!helper) throw new Error(`cc-side does not support ${target.os} on ${target.arch} yet.`)
+  return [`${$.plugin.root}/helpers/${helperFile(helper)}`]
 }

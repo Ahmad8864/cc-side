@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import manifest from '../.claude-plugin/plugin.json'
 import { version } from '../package.json'
+import { helperFile, helperTargets } from '../shared/targets.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url).href)
 const dist = join(root, 'dist')
@@ -24,23 +25,21 @@ async function run(command: string[], cwd = root) {
 
 await rm(dist, { recursive: true, force: true })
 await mkdir(join(plugin, '.claude-plugin'), { recursive: true })
-await mkdir(join(plugin, 'bin'), { recursive: true })
 await cp(join(root, '.claude-plugin/plugin.json'), join(plugin, '.claude-plugin/plugin.json'))
 for (const path of ['hooks', 'shared', 'licenses', 'README.md', 'LICENSE']) {
   await cp(join(root, path), join(plugin, path), { recursive: true })
 }
-await cp(join(root, 'bin/cc-side'), join(plugin, 'bin/cc-side'))
 
-for (const arch of ['arm64', 'x64']) {
+for (const target of helperTargets) {
   await run([
     process.execPath,
     'build',
     '--compile',
-    `--target=bun-darwin-${arch}`,
+    `--target=bun-${target.os}-${target.arch}`,
     '--define',
     'CC_SIDE_COMPILED=true',
     '--outfile',
-    join(plugin, `bin/cc-side-darwin-${arch}`),
+    join(plugin, 'helpers', helperFile(target)),
     'bridge/main.ts',
   ])
 }

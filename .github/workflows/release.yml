@@ -19,7 +19,7 @@ jobs:
       - run: bun run check
       - run: bun run build
       - name: Check standalone helper
-        run: dist/plugin/bin/cc-side-darwin-$(uname -m | sed s/x86_64/x64/) --version
+        run: dist/plugin/helpers/cc-side-darwin-$(uname -m | sed s/x86_64/x64/) --version
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

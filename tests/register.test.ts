@@ -6,8 +6,9 @@ import { nodes } from './tree.ts'
 type Setup = Partial<
   Pick<ChatState, 'status' | 'permissions' | 'messages' | 'model' | 'effort' | 'models'>
 > & {
-  // A development Bun, which runs the helper from source.
-  bun?: string
+  env?: Record<string, string>
+  // What `uname -sm` prints on this computer.
+  uname?: string
 }
 
 // Exercise the real pane hooks, including Button callbacks. The host can hide
@@ -16,7 +17,8 @@ async function harness({
   status = 'ready',
   permissions = [],
   messages = [],
-  bun,
+  env = {},
+  uname = 'Darwin arm64',
   ...selection
 }: Setup = {}) {
   const handlers = new Map<string, (...args: any[]) => any>()
@@ -39,7 +41,7 @@ async function harness({
   let settings: Record<string, unknown> = {}
   const stored: Record<string, unknown> = {}
   const $ = {
-    env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? bun : undefined) },
+    env: { get: async (key: string) => env[key] },
     session: {
       id: async () => 'parent',
       cwd: async () => '/project',
@@ -50,6 +52,7 @@ async function harness({
     settings: { read: async () => settings },
     process: {
       run: async (command: string[], options: { stdin: string }) => {
+        if (command[0] === 'uname') return { exitCode: 0, stdout: `${uname}\n` }
         launches.push(command)
         launchOptions.push(JSON.parse(options.stdin))
         starts++
@@ -666,13 +669,26 @@ test('helper startup errors are shown, with a reinstall hint only for unreadable
   expect(JSON.stringify(await h.render())).toContain('Reinstall cc-side')
 })
 
-test('installed plugins launch the packaged helper; Bun is an explicit development override', async () => {
-  const installed = await harness()
-  await installed.command()
-  expect(installed.launches).toEqual([['/plugin/bin/cc-side']])
-  const development = await harness({ bun: '/dev/bun' })
-  await development.command()
-  expect(development.launches).toEqual([['/dev/bun', '/plugin/bridge/main.ts']])
+test('each computer launches its packaged helper; Bun is an explicit development override', async () => {
+  const launches = async (setup: Setup) => {
+    const h = await harness(setup)
+    await h.command()
+    return h.launches
+  }
+  expect(await launches({})).toEqual([['/plugin/helpers/cc-side-darwin-arm64']])
+  expect(await launches({ uname: 'Darwin x86_64' })).toEqual([
+    ['/plugin/helpers/cc-side-darwin-x64'],
+  ])
+  expect(await launches({ env: { CC_SIDE_BUN: '/dev/bun' } })).toEqual([
+    ['/dev/bun', '/plugin/bridge/main.ts'],
+  ])
+})
+
+test('a computer without a packaged helper is told so', async () => {
+  const h = await harness({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'AMD64' } })
+  await h.command()
+  expect(h.launches).toEqual([])
+  expect(JSON.stringify(await h.render())).toContain('cc-side does not support windows on x64 yet.')
 })
 
 test('a new side chat starts at the effort of the last main turn', async () => {
