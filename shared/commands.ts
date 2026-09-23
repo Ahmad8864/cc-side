@@ -10,6 +10,11 @@ export const localCommands: SideCommand[] = [
     description: 'Set thinking effort for this side chat',
     argumentHint: '[level]',
   },
+  {
+    name: 'edit',
+    description: 'Allow or block file edits, here and in new side chats',
+    argumentHint: '[on|off]',
+  },
   { name: 'stop', description: 'Stop the current reply', argumentHint: '' },
   { name: 'close', description: 'Close and discard this side chat', argumentHint: '' },
 ]
@@ -67,16 +72,28 @@ function modelRank(model: SideModel, query: string) {
 
 export type Completion = { value: string; label: string; description: string; execute?: boolean }
 /** The side chat's current choices, which pickers list and mark. */
-export type SideSettings = { models: SideModel[]; model?: string; effort?: string }
+export type SideSettings = {
+  models: SideModel[]
+  model?: string
+  effort?: string
+  canEdit?: boolean
+}
 export function completions(
   text: string,
   commands: SideCommand[],
-  { models, model, effort }: SideSettings,
+  { models, model, effort, canEdit }: SideSettings,
 ): Completion[] {
   if (!text.startsWith('/') || text.includes('\n')) return []
-  const match = /^\/(model|effort)\s+(.*)$/i.exec(text)
+  const match = /^\/(model|effort|edit)\s+(.*)$/i.exec(text)
   if (match) {
     const query = match[2].toLowerCase()
+    if (match[1].toLowerCase() === 'edit')
+      return [
+        { value: 'on', label: canEdit ? 'on ✓' : 'on', description: 'Claude can change files' },
+        { value: 'off', label: canEdit ? 'off' : 'off ✓', description: 'Read-only' },
+      ]
+        .filter((choice) => choice.value.startsWith(query))
+        .map((choice) => ({ ...choice, value: `/edit ${choice.value}`, execute: true }))
     if (match[1].toLowerCase() === 'model')
       return models
         .filter((m) => `${m.value} ${m.displayName} ${m.description}`.toLowerCase().includes(query))

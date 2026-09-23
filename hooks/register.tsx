@@ -33,6 +33,8 @@ export const register: Register = (on) => {
     reveal: (key: string) => void
     focus: (key: string) => Promise<void>
     closePane: () => Promise<void>
+    readEditing: () => Promise<boolean>
+    saveEditing: (canEdit: boolean) => Promise<void>
   }
   let opened = false
   let generation = 0
@@ -57,6 +59,7 @@ export const register: Register = (on) => {
   const expanded = new Set<string>()
   let focusedPermission: string | undefined
   let mainEffort: EffortLevel | undefined
+  let savedEditing = false
   const composerProps = (): ComposerProps => ({
     epoch: generation,
     seed: draft,
@@ -69,7 +72,15 @@ export const register: Register = (on) => {
     models: state.models ?? [],
     model: state.model ?? '',
     effort: state.effort ?? '',
+    canEdit: state.canEdit ?? false,
   })
+
+  // New side chats start with the edit setting the user chose last.
+  const rememberEditing = () => {
+    if (state.canEdit === undefined || state.canEdit === savedEditing) return
+    savedEditing = state.canEdit
+    void host.saveEditing(savedEditing)
+  }
 
   const trace = (kind: string, data: unknown) => {
     if (!tracePath) return
@@ -89,6 +100,7 @@ export const register: Register = (on) => {
       if (epoch !== generation) return
       if (result.revision > state.revision) {
         state = result
+        rememberEditing()
         trace('side.state', state)
         host.invalidate()
         if (follow)
@@ -118,7 +130,10 @@ export const register: Register = (on) => {
     const epoch = generation
     try {
       const result: ChatState = await host.request(endpoint, path, body)
-      if (epoch === generation && result.revision >= state.revision) state = result
+      if (epoch === generation && result.revision >= state.revision) {
+        state = result
+        rememberEditing()
+      }
       return epoch === generation
     } catch (error) {
       if (epoch === generation) localError = String(error)
@@ -152,7 +167,10 @@ export const register: Register = (on) => {
       const result: ChatState = await host.request(endpoint, '/send', { id, text: text.trim() })
       if (epoch !== generation) return false
       draft = ''
-      if (result.revision >= state.revision) state = result
+      if (result.revision >= state.revision) {
+        state = result
+        rememberEditing()
+      }
       trace('side.state', state)
       follow = true
       host.after(50, () => {
@@ -181,7 +199,10 @@ export const register: Register = (on) => {
     pendingSubmissions.clear()
     host.invalidate()
     try {
-      const connection = await host.start(await host.options(mainEffort))
+      savedEditing = await host.readEditing()
+      const connection = await host.start(
+        await host.options({ effort: mainEffort, canEdit: savedEditing }),
+      )
       if (epoch !== generation) {
         await host.request(connection, '/close')
         return
@@ -254,6 +275,10 @@ export const register: Register = (on) => {
       closePane: async () => {
         await close()
         await $.ui.close({ id: PANE })
+      },
+      readEditing: async () => (await $.store.get('canEdit')) === true,
+      saveEditing: async (canEdit) => {
+        await $.store.set('canEdit', canEdit)
       },
     }
     tracePath = (await $.env.get('CC_SIDE_TRACE')) ?? undefined
@@ -400,6 +425,19 @@ export const register: Register = (on) => {
               {state.model ? `${modelLabel(state.model, state.models)}${effort}` : ''}
             </Text>
           </Box>
+          <Box>
+            {state.canEdit === undefined ? null : (
+              <Button
+                key="edit-side"
+                plain
+                dimColor={!state.canEdit}
+                label={state.canEdit ? 'can edit' : 'read-only'}
+                onPress={async () => {
+                  await action('/edit', { canEdit: !state.canEdit })
+                }}
+              />
+            )}
+          </Box>
         </Box>
         <Box flexDirection="column" flexGrow={1} paddingTop={1} width={columns}>
           {renderMessages(
@@ -543,19 +581,19 @@ export const register: Register = (on) => {
 }
 
 // Mods requires engine calls to stay in the registered hook module.
-type BridgePath = '/state' | '/send' | '/permission' | '/stop' | '/close'
+type BridgePath = '/state' | '/send' | '/permission' | '/edit' | '/stop' | '/close'
 type BridgeClient = ReturnType<typeof createBridgeClient>
 
 function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
-    async options(effort?: EffortLevel): Promise<StartOptions> {
+    async options(choices: Pick<StartOptions, 'effort' | 'canEdit'>): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
       const { permissions, sandbox } = await $.settings.read()
       return {
         parentSessionId: await $.session.id(),
         cwd: await $.session.cwd(),
         model: await $.session.model(),
-        ...(effort ? { effort } : {}),
+        ...choices,
         allowEmptyParent: (await $.session.messages()).length === 0,
         securitySettings: { permissions, sandbox } as StartOptions['securitySettings'],
         ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),

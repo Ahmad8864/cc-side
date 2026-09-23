@@ -62,3 +62,11 @@ test('/effort completion names only the extremes and marks the current level', (
     ['auto', 'Model default'],
   ])
 })
+
+test('/edit completion offers on and off and marks the current setting', () => {
+  const menu = completions('/edit ', [], { models, canEdit: false })
+  expect(menu.map((c) => [c.value, c.label])).toEqual([
+    ['/edit on', 'on'],
+    ['/edit off', 'off ✓'],
+  ])
+})

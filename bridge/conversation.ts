@@ -1,6 +1,8 @@
 import {
   query,
   type CanUseTool,
+  type HookInput,
+  type HookJSONOutput,
   type PermissionResult,
   type SDKMessage,
   type SDKUserMessage,
@@ -11,6 +13,15 @@ import { AsyncQueue } from './queue.ts'
 import { commandCatalog, modelLabel, parseCommand, supportedEfforts } from '../shared/commands.ts'
 import { toolOutput } from './tool-output.ts'
 import sessionEnv from '../shared/session-env.json'
+
+// Claude's own file-changing tools, which a read-only side chat refuses.
+const editTools = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
+const sidePurpose =
+  'The user opened a separate side chat from this conversation. Use the inherited context to answer their questions directly here, without continuing the parent task. Do not message other sessions unless the user asks.'
+const editingOn =
+  'You may edit files here, but the main conversation works in the same directory, so change only what the user asks.'
+const editingOff =
+  'File edits are blocked in this side chat: read and search freely, and describe changes instead of making them. The user can allow edits with /edit on.'
 
 export class Conversation {
   readonly state: ChatState = {
@@ -29,6 +40,7 @@ export class Conversation {
   private requestIndexes = new Map<string, number>()
   private approvals = new Map<string, (result: PermissionResult) => void>()
   private needsSideInstruction = true
+  private editingChanged = false
   private closed = false
   private ended = false
   private stopping = false
@@ -41,6 +53,7 @@ export class Conversation {
     this.state.model = options.model
     this.state.cwd = options.cwd
     this.state.effort = options.effort ?? 'auto'
+    this.state.canEdit = options.canEdit ?? false
     const env: Record<string, string | undefined> = {
       ...process.env,
       CC_SIDE_WORKER: '1',
@@ -76,6 +89,7 @@ export class Conversation {
         ...(options.isolatedTest ? { strictMcpConfig: true, mcpServers: {} } : {}),
         env,
         canUseTool: (tool, input, context) => this.requestPermission(tool, input, context),
+        hooks: { PreToolUse: [{ hooks: [async (input) => this.guardEdits(input)] }] },
         stderr: (text) => {
           // Do not log credentials, prompts, or model output to disk.
           if (text.includes('Error') && this.state.status === 'starting') {
@@ -128,6 +142,26 @@ export class Conversation {
       signal.addEventListener('abort', abort, { once: true })
       if (signal.aborted) abort()
     })
+  }
+
+  // Hooks run before permission rules, so an allow rule cannot edit a read-only side.
+  private guardEdits(input: HookInput): HookJSONOutput {
+    if (this.state.canEdit || input.hook_event_name !== 'PreToolUse') return {}
+    if (!editTools.has(input.tool_name)) return {}
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: editingOff,
+      },
+    }
+  }
+
+  setEditing(canEdit: boolean) {
+    if (this.state.canEdit === canEdit) return
+    this.state.canEdit = canEdit
+    this.editingChanged = true
+    this.changed()
   }
 
   private async initialize() {
@@ -216,9 +250,16 @@ export class Conversation {
           this.changed()
         } else
           this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort ${choices}.`)
+      } else if (command.name === 'edit') {
+        if (command.args === 'on' || command.args === 'off') this.setEditing(command.args === 'on')
+        else if (command.args) throw new Error('Choose on or off.')
+        else
+          this.local(
+            `File edits are ${this.state.canEdit ? 'on' : 'off'}. Use /edit on or /edit off; new side chats start the same way.`,
+          )
       } else if (command.name === 'help') {
         this.local(
-          '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\n' +
+          '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\nSide chats start read-only. /edit on lets Claude change files, and new side chats keep your last choice.\n\n' +
             this.state
               .commands!.map((c) => `- **/${c.name}** ${c.argumentHint} — ${c.description}`)
               .join('\n'),
@@ -256,12 +297,12 @@ export class Conversation {
     if (!text.trim() || text.length > 50000)
       throw new Error('Enter a message of at most 50,000 characters')
     this.state.messages.push({ id: crypto.randomUUID(), role: 'user', text })
-    const content =
-      this.needsSideInstruction && !command
-        ? 'The user opened a separate side chat from this conversation. Use the inherited context to answer their questions directly here, without continuing the parent task. Do not message other sessions unless the user asks.\n\n' +
-          text
-        : text
-    if (!command) this.needsSideInstruction = false
+    const preface = command ? '' : this.preface()
+    const content = preface ? `${preface}\n\n${text}` : text
+    if (!command) {
+      this.needsSideInstruction = false
+      this.editingChanged = false
+    }
     this.state.status = 'working'
     this.state.activity = { phase: 'requesting', startedAt: Date.now() }
     this.state.error = undefined
@@ -274,6 +315,15 @@ export class Conversation {
       session_id: this.state.sessionId ?? '',
     })
     this.changed()
+  }
+
+  // What Claude needs with the next message: the side's purpose, then any change to edits.
+  private preface() {
+    const editing = this.state.canEdit ? editingOn : editingOff
+    if (this.needsSideInstruction) return `${sidePurpose} ${editing}`
+    if (this.editingChanged)
+      return `The user turned file edits ${this.state.canEdit ? 'on' : 'off'}. ${editing}`
+    return ''
   }
 
   decide(id: string, allow: boolean, answers?: Record<string, string>) {
@@ -412,9 +462,11 @@ export class Conversation {
       if (!tool) continue
       const stopped = this.stopping && block.is_error
       const output = toolOutput(stopped ? 'Stopped by you.' : block.content)
-      tool.status = stopped ? 'cancelled' : block.is_error ? 'error' : 'done'
-      tool.text = output.text
-      tool.outputTruncated = output.truncated
+      // Claude reports a read-only refusal as a hook error; say what happened instead.
+      const refused = block.is_error && output.text.includes(editingOff)
+      tool.status = stopped || refused ? 'cancelled' : block.is_error ? 'error' : 'done'
+      tool.text = refused ? 'Blocked: this side chat is read-only.' : output.text
+      tool.outputTruncated = !refused && output.truncated
     }
   }
 

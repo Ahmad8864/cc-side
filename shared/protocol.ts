@@ -65,6 +65,7 @@ export type ChatState = {
   runtime?: string
   model?: string
   effort?: string
+  canEdit?: boolean
   cwd?: string
   commands?: SideCommand[]
   models?: SideModel[]
@@ -77,6 +78,7 @@ export type StartOptions = {
   cwd: string
   model: string
   effort?: EffortLevel
+  canEdit?: boolean
   ownerPid?: number
   settingSources?: ('user' | 'project' | 'local')[]
   securitySettings?: SecuritySettings

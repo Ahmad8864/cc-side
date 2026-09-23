@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import type {
+  HookInput,
   Options,
   Query,
   SDKMessage,
@@ -471,6 +472,76 @@ test('first slash command reaches the dispatcher unchanged, then normal text get
   h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
   h.chat.send('What is the plan?')
   expect((await input.next()).value.message.content).toContain('separate side chat')
+  h.chat.close()
+})
+
+test('side chats refuse file edits unless edits are on, whatever the permission rules allow', async () => {
+  const h = harness()
+  const guard = (tool: string) =>
+    h.options.hooks!.PreToolUse![0].hooks[0](
+      { hook_event_name: 'PreToolUse', tool_name: tool, tool_input: {} } as HookInput,
+      'tool',
+      { signal: new AbortController().signal },
+    )
+  expect(h.chat.state.canEdit).toBe(false)
+  expect(await guard('Write')).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } })
+  expect(await guard('Read')).toEqual({})
+  await h.chat.submit('/edit on')
+  expect(h.chat.state.canEdit).toBe(true)
+  expect(await guard('Write')).toEqual({})
+  await expect(h.chat.submit('/edit maybe')).rejects.toThrow('Choose on or off.')
+  h.chat.close()
+})
+
+test('a refused edit reads as blocked rather than as a hook error', () => {
+  const { chat } = harness()
+  chat.accept(
+    event({
+      type: 'assistant',
+      message: {
+        id: 'm',
+        usage: {},
+        content: [{ type: 'tool_use', id: 'w', name: 'Write', input: { file_path: 'a.txt' } }],
+      },
+    }),
+  )
+  chat.accept(
+    event({
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'w',
+            is_error: true,
+            content:
+              'PreToolUse:Write hook error: File edits are blocked in this side chat: read and search freely, and describe changes instead of making them. The user can allow edits with /edit on.',
+          },
+        ],
+      },
+    }),
+  )
+  expect(chat.state.messages[0]).toMatchObject({
+    status: 'cancelled',
+    text: 'Blocked: this side chat is read-only.',
+  })
+  chat.close()
+})
+
+test('Claude learns the edit setting with the first message and with each change', async () => {
+  const h = harness({ canEdit: true }),
+    input = h.input[Symbol.asyncIterator]()
+  const reply = () =>
+    h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  h.chat.send('First')
+  expect((await input.next()).value.message.content).toContain('You may edit files')
+  reply()
+  h.chat.setEditing(false)
+  h.chat.send('Second')
+  expect((await input.next()).value.message.content).toStartWith('The user turned file edits off.')
+  reply()
+  h.chat.send('Third')
+  expect((await input.next()).value.message.content).toBe('Third')
   h.chat.close()
 })
 

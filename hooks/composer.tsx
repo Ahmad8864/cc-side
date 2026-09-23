@@ -16,6 +16,7 @@ export type ComposerProps = {
   models: SideModel[]
   model: string
   effort: string
+  canEdit: boolean
 }
 type State = Editor & {
   instance: string
@@ -149,7 +150,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
       const selected = shown[state.selected % shown.length]
       if (selected) {
         choose(selected, false)
-        if (!/^\/(model|effort) $/.test(selected.value)) instance.send()
+        if (!/^\/(model|effort|edit) $/.test(selected.value)) instance.send()
       } else instance.send()
       return
     }

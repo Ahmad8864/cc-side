@@ -43,6 +43,9 @@ async function main() {
           if (typeof body.id !== 'string' || typeof body.allow !== 'boolean')
             throw new Error('Invalid decision')
           conversation.decide(body.id, body.allow, body.answers)
+        } else if (path === '/edit') {
+          if (typeof body.canEdit !== 'boolean') throw new Error('Invalid edit setting')
+          conversation.setEditing(body.canEdit)
         } else if (path === '/stop') await conversation.stop()
         else if (path === '/close') setTimeout(shutdown, 20)
         else return new Response('Not found', { status: 404 })

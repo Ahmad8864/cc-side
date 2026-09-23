@@ -43,6 +43,7 @@ async function harness(
   let startup: string | undefined
   let state: ChatState
   let settings: Record<string, unknown> = {}
+  const stored: Record<string, unknown> = {}
   const $ = {
     env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? developmentBun : undefined) },
     session: {
@@ -63,6 +64,7 @@ async function harness(
           revision: 1,
           status: initialStatus,
           model: 'sonnet',
+          canEdit: launchOptions.at(-1).canEdit ?? false,
           ...selection,
           messages: structuredClone(messages),
           permissions,
@@ -92,6 +94,10 @@ async function harness(
           state.messages.push({ id: body.id, role: 'user', text: body.text })
           state.revision++
         }
+        if (path === '/edit') {
+          state.canEdit = body.canEdit
+          state.revision++
+        }
         return { ok: true, text: JSON.stringify(state) }
       },
     },
@@ -117,6 +123,12 @@ async function harness(
         ),
     },
     clock: { after: (_ms: number, fn: () => void) => timers.push(fn) },
+    store: {
+      get: async (key: string) => stored[key],
+      set: async (key: string, value: unknown) => {
+        stored[key] = value
+      },
+    },
     fs: { write: async () => {} },
     command: { register: async () => {} },
     prompt: {
@@ -176,6 +188,7 @@ async function harness(
     setPrompt: (text: string) => {
       prompt = text
     },
+    stored,
     starts: () => starts,
     hidden: () => hidden,
     failNext: () => {
@@ -538,6 +551,21 @@ test('a new side chat starts at the effort of the last main turn', async () => {
   await h.invoke('classic.Stop', {})
   await h.command()
   expect(h.launchOptions[1]).not.toHaveProperty('effort')
+})
+
+test('new side chats start with the last edit setting, which the header badge toggles', async () => {
+  const h = await harness()
+  await h.command()
+  expect(h.launchOptions[0].canEdit).toBe(false)
+  const badge = (await h.render()).find((n) => n.props.key === 'edit-side')!
+  expect(badge.props.label).toBe('read-only')
+  await badge.props.onPress()
+  expect(h.requests.find((r) => r.path === '/edit')?.body).toEqual({ canEdit: true })
+  expect(h.stored.canEdit).toBe(true)
+  expect((await h.render()).find((n) => n.props.key === 'edit-side')!.props.label).toBe('can edit')
+  await h.command('close')
+  await h.command()
+  expect(h.launchOptions[1].canEdit).toBe(true)
 })
 
 test('startup forwards effective security settings without copying credentials or hooks', async () => {

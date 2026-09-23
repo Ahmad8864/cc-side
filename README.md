@@ -31,6 +31,9 @@ Mods APIs can change between releases.
 - `/side` opens the pane; `/side your question` opens it and sends a question.
 - Click the composer to type. Enter sends; Shift+Enter adds a line.
 - Type `/` for commands and project skills. `/model` and `/effort` affect only the side.
+- Side chats start read-only: Claude can read and search but not edit files.
+  `/edit on`, or clicking `read-only` in the header, allows edits. New side chats
+  start the way you last chose.
 - Tools request approval in the pane. Stop interrupts the current reply.
 - Tool rows show compact arguments and output. Click a row to expand its details.
 - Escape returns to main. ×, `/close`, or `/side close` discards the side chat and draft.
@@ -52,9 +55,10 @@ its automatic sizing.
 - The chats share a working directory: file changes survive closing the side.
   The child transcript is not resumable, but tool files and configured logging
   can persist.
+- Read-only blocks Claude's file-editing tools. Shell commands still follow your
+  approval rules, so an allowed command that writes files can run.
 - Permission and sandbox settings are copied when the pane opens. Session-only
   rules, CLI tool restrictions, and live mode changes are not reliably inherited.
-  Main-chat plan mode does not guarantee that the side is read-only.
 - This is a macOS prototype. Long histories, attachments, every Claude command,
   and other terminals/platforms have not been exhaustively tested.
 
