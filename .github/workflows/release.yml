@@ -1,9 +1,27 @@
 name: Release
 
+# Changes to the helpers, and manual runs, build and verify without publishing.
 on:
   push:
     tags: ['cc-side--v*']
-  # A manual run builds and verifies every helper without publishing.
+    branches: [main]
+    paths:
+      - bridge/**
+      - shared/**
+      - scripts/build.ts
+      - package.json
+      - bun.lock
+      - tests/lifecycle.test.ts
+      - .github/workflows/release.yml
+  pull_request:
+    paths:
+      - bridge/**
+      - shared/**
+      - scripts/build.ts
+      - package.json
+      - bun.lock
+      - tests/lifecycle.test.ts
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:
