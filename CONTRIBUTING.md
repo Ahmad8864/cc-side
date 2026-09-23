@@ -23,7 +23,7 @@ bun run dev         # run the source plugin
 - `hooks/composer.tsx`: the drawing-thread editor and activity indicator.
 - `bridge/conversation.ts`: the Agent SDK session, commands, and streamed events.
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
-- `shared/`: protocol types, commands, and pure text/layout operations.
+- `shared/`: protocol types, commands, model labels, and pure text/layout operations.
 - `types/`: generated Mods declarations; see its upstream note before updating.
 
 The SDK runs the installed Claude binary; it is not bundled with the plugin. It forks a saved

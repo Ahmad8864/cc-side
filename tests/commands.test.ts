@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { completions, modelLabel } from '../shared/commands.ts'
+import { completions } from '../shared/commands.ts'
+import { modelLabel } from '../shared/models.ts'
 import type { SideModel } from '../shared/protocol.ts'
 
 const levels = ['low', 'medium', 'high', 'xhigh', 'max']

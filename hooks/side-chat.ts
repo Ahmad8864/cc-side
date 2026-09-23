@@ -6,7 +6,8 @@ import type {
   StartOptions,
   Submission,
 } from '../shared/protocol.ts'
-import { effortLevels, localCommands } from '../shared/commands.ts'
+import { localCommands } from '../shared/commands.ts'
+import { effortLevels } from '../shared/models.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
 import type { Answers } from './permissions.tsx'

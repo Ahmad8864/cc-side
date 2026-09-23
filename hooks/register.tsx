@@ -1,6 +1,6 @@
 import type { EngineInterface, Register } from 'claude-code'
 import type { ChatState, Endpoint, StartOptions, StartupResult } from '../shared/protocol.ts'
-import { effortLevels } from '../shared/commands.ts'
+import { effortLevels } from '../shared/models.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 

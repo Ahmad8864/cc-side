@@ -1,6 +1,5 @@
-import type { EffortLevel, SideCommand, SideModel } from './protocol.ts'
-
-export const effortLevels: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
+import type { SideCommand, SideModel } from './protocol.ts'
+import { supportedEfforts } from './models.ts'
 
 export const localCommands: SideCommand[] = [
   { name: 'help', description: 'Show side chat commands and keyboard shortcuts', argumentHint: '' },
@@ -39,28 +38,6 @@ export function commandCatalog(commands: SideCommand[]): SideCommand[] {
 export function parseCommand(text: string) {
   const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
   return match ? { name: match[1].toLowerCase(), args: (match[2] ?? '').trim() } : undefined
-}
-
-const findModel = (model: string, models: SideModel[]) =>
-  models.find((m) => m.value === model || m.resolvedModel === model)
-
-export function modelLabel(model: string, models: SideModel[] = []) {
-  const entry = findModel(model, models)
-  // Some catalogs name the version before " · " in the description, others in displayName.
-  const [version, summary] = entry?.description.split(' · ') ?? []
-  return (
-    (summary ? version : entry?.displayName) ||
-    model
-      .replace(/^claude-/, '')
-      .replace(/\[1m\]/, ' (1M context)')
-      .replace(/-/g, ' ')
-  )
-}
-
-/** A listed model without effort levels ignores effort; an unlisted one may accept any. */
-export function supportedEfforts(model: string, models: SideModel[] = []): string[] {
-  const entry = findModel(model, models)
-  return entry ? (entry.supportedEffortLevels ?? []) : effortLevels
 }
 
 function effortHint(level: string, levels: string[]) {

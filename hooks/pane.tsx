@@ -1,6 +1,6 @@
 import type { Elements, RenderElement } from 'claude-code'
 import type { ChatState } from '../shared/protocol.ts'
-import { modelLabel, supportedEfforts } from '../shared/commands.ts'
+import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { treeLimit } from '../shared/limits.ts'
 import { renderPermissions, type Answers } from './permissions.tsx'
 import { renderMessages } from './transcript.tsx'
