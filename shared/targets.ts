@@ -23,14 +23,14 @@ export const helperFile = ({ os, arch }: Target) =>
 const systems: Record<string, string> = { windows_nt: 'windows' }
 const architectures: Record<string, string> = { x86_64: 'x64', amd64: 'x64', aarch64: 'arm64' }
 
-/** A computer's target from how `uname -sm` or Windows name it: "Linux x86_64", "Windows_NT AMD64". */
+/** A computer's target, from `uname -sm` ("Linux x86_64") or Windows ("Windows_NT AMD64"). */
 export function targetOf(system = '', machine = ''): Target {
   const os = system.toLowerCase()
   const arch = machine.toLowerCase()
   return { os: systems[os] ?? os, arch: architectures[arch] ?? arch }
 }
 
-/** The helper a computer runs: its own, else on arm64 Windows, which runs x64 programs, the x64 one. */
+/** The helper a computer runs: its own, or on arm64 Windows, which emulates x64, the x64 one. */
 export function helperFor(target: Target) {
   const emulated =
     target.os === 'windows' && target.arch === 'arm64' ? [{ ...target, arch: 'x64' }] : []

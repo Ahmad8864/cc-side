@@ -3,24 +3,24 @@ import { accessSync, constants, readlinkSync } from 'node:fs'
 import { delimiter, isAbsolute, join } from 'node:path'
 
 type Env = Record<string, string | undefined>
+type Lookup = (pid: number, env: Env) => string | undefined
 
 // How each operating system names the executable of a running process.
-const executables: Partial<Record<NodeJS.Platform, (pid: number, env: Env) => string | undefined>> =
-  {
-    // macOS reports the argv[0] a process started with, so a bare name is looked up on PATH.
-    darwin: (pid, env) => {
-      const name = output('ps', ['-o', 'comm=', '-p', String(pid)])
-      return name && (isAbsolute(name) ? name : onPath(name, env))
-    },
-    linux: (pid) => readlinkSync(`/proc/${pid}/exe`),
-    win32: (pid) =>
-      output('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `(Get-Process -Id ${pid}).Path`,
-      ]),
-  }
+const executables: Partial<Record<NodeJS.Platform, Lookup>> = {
+  // macOS reports the argv[0] a process started with, so a bare name is looked up on PATH.
+  darwin: (pid, env) => {
+    const name = output('ps', ['-o', 'comm=', '-p', String(pid)])
+    return name && (isAbsolute(name) ? name : onPath(name, env))
+  },
+  linux: (pid) => readlinkSync(`/proc/${pid}/exe`),
+  win32: (pid) =>
+    output('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-Process -Id ${pid}).Path`,
+    ]),
+}
 
 /**
  * The Claude executable a side chat runs: CC_SIDE_CLAUDE when set, else the Claude that

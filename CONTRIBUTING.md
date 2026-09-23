@@ -25,7 +25,7 @@ bun run dev         # run the source plugin
 - `bridge/instructions.ts`: what the side's Claude is told besides the user's messages.
 - `bridge/sdk-options.ts`: how the side's Claude runs: fork, environment, and security settings.
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
-- `bridge/platform.ts`: what differs by operating system, such as finding the main session's Claude.
+- `bridge/platform.ts`: what differs by operating system: finding main's Claude and ending processes.
 - `shared/`: protocol types, commands, model labels, helper targets, and pure text/layout operations.
 - `types/`: generated Mods declarations; see its upstream note before updating.
 
