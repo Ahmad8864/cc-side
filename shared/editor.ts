@@ -1,4 +1,4 @@
-// Pure text operations shared by the drawing-thread composer and its tests.
+// Pure text operations for the drawing-thread composer and other drawn text.
 // UTF-16 offsets match strings; navigation and wrapping use grapheme/cell bounds.
 type Glyph = { text: string; start: number; end: number; width: number }
 type Line = { start: number; end: number; glyphs: Glyph[]; width: number }

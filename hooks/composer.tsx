@@ -23,6 +23,8 @@ type State = Editor & {
   seq: number
   selected: number
   hiddenMenu: boolean
+  // Set by a key or click: Pane.isFocused turns false once this Client has focus,
+  // so the caret follows this instead. The host owns Escape and focus moves.
   active: boolean
   pending?: Submission
   history: string[]
@@ -74,8 +76,6 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     })
   }
   io.props = props
-  // Pane.isFocused becomes false when the drawing-thread Client takes focus.
-  // Keep the insertion point visible; the host owns Escape/focus transfer.
   if (io.state.pending && props.receipt?.id === io.state.pending.id) {
     const pending = io.state.pending
     io.state.pending = undefined

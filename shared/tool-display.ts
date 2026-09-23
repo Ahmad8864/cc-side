@@ -83,8 +83,7 @@ export function toolDisplay(message: ChatMessage, columns: number, cwd?: string)
     const content = (numbered ? line.replace(lineNumber, '') : line).trim()
     return content && !/^[\[\]{},]+$/.test(content)
   })
-  // The end of command output commonly holds its result or failure. This is
-  // an excerpt of the actual output, not a guessed success summary.
+  // The end of output usually holds the result or failure; show it as written.
   const preview = lines
     .slice(-2)
     .map((line, index) =>

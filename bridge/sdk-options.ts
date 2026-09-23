@@ -2,7 +2,7 @@ import type { Options } from '@anthropic-ai/claude-agent-sdk'
 import type { StartOptions } from '../shared/protocol.ts'
 import sessionEnv from '../shared/session-env.json'
 
-/** The side's Claude: a fork of main's saved conversation that saves nothing of its own. */
+/** The side's Claude: forked from main's saved conversation when there is one, saving nothing. */
 export function sdkOptions(
   options: StartOptions,
   handlers: Pick<Options, 'canUseTool' | 'hooks' | 'stderr'>,
