@@ -33,10 +33,13 @@ async function harness(
   const requests: { path: string; body: any; url: string }[] = []
   const opens: any[] = []
   const launches: string[][] = []
+  const launchOptions: any[] = []
   const timers: (() => void)[] = []
   const scrolls: unknown[] = []
+  const focuses: unknown[] = []
   let prompt = ''
   let state: ChatState
+  let settings: Record<string, unknown> = {}
   const $ = {
     env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? developmentBun : undefined) },
     session: {
@@ -46,9 +49,11 @@ async function harness(
       messages: async () => [],
     },
     plugin: { root: '/plugin' },
+    settings: { read: async () => settings },
     process: {
-      run: async (command: string[]) => {
+      run: async (command: string[], options: { stdin: string }) => {
         launches.push(command)
+        launchOptions.push(JSON.parse(options.stdin))
         starts++
         state = {
           revision: 1,
@@ -83,6 +88,10 @@ async function harness(
     },
     ui: {
       invalidate() {},
+      focus: async (args: unknown) => {
+        focuses.push(args)
+        return {}
+      },
       scroll: async (args: unknown) => {
         scrolls.push(args)
       },
@@ -147,8 +156,13 @@ async function harness(
     requests,
     opens,
     launches,
+    launchOptions,
+    setSettings: (value: Record<string, unknown>) => {
+      settings = value
+    },
     timers,
     scrolls,
+    focuses,
     prompt: () => prompt,
     setPrompt: (text: string) => {
       prompt = text
@@ -318,6 +332,48 @@ test('tool permission controls send the explicit allow or deny decision', async 
   }
 })
 
+test('sensitive approvals show Claude warnings and focus Deny without approval shortcuts', async () => {
+  const h = await harness('permission', [
+    {
+      id: 'sensitive',
+      tool: 'mcp__files__read',
+      input: { path: '/outside/private.txt' },
+      title: 'Claude wants to read a private file',
+      description: 'This grants access outside the project.',
+      decisionReason: 'The path is outside the allowed directories.',
+      blockedPath: '/outside/private.txt',
+      mcpServer: { name: 'files\u001b', source: 'project' },
+      defaultToNo: true,
+    },
+  ])
+  await h.command()
+  const tree = await h.render()
+  for (const warning of [
+    'Claude wants to read a private file',
+    'This grants access outside the project.',
+    'The path is outside the allowed directories.',
+    '/outside/private.txt',
+    'project',
+  ]) {
+    expect(tree.some((node) => node.children.includes(warning))).toBe(true)
+  }
+  expect(tree.some((node) => node.children.includes('files\u001b'))).toBe(false)
+  const deny = tree.find((node) => node.props.key === 'deny-sensitive')!
+  const allow = tree.find((node) => node.props.key === 'allow-sensitive')!
+  expect(tree.indexOf(deny)).toBeLessThan(tree.indexOf(allow))
+  expect(deny.props.autoFocus).toBe(true)
+  expect(allow.props.autoFocus).toBeUndefined()
+  expect(allow.props.hotkey).toBeUndefined()
+  expect(allow.props.action).toBeUndefined()
+  h.timers.at(-1)!()
+  expect(h.focuses).toEqual([{ requestId: 'side', key: 'deny-sensitive' }])
+  await deny.props.onPress()
+  expect(h.requests.find((request) => request.path === '/permission')?.body).toEqual({
+    id: 'sensitive',
+    allow: false,
+  })
+})
+
 test('tool details expand and collapse without replacing the composer or losing its draft', async () => {
   const h = await harness('ready', [], undefined, [
     {
@@ -367,4 +423,23 @@ test('installed plugins launch the packaged helper; Bun is an explicit developme
   const development = await harness('ready', [], '/dev/bun')
   await development.command()
   expect(development.launches).toEqual([['/dev/bun', '/plugin/bridge/main.ts']])
+})
+
+test('startup forwards effective security settings without copying credentials or hooks', async () => {
+  const h = await harness()
+  const security = {
+    permissions: { deny: ['Read(.env)'], ask: ['Bash(*)'] },
+    sandbox: { enabled: true, network: { allowedDomains: ['example.com'] } },
+  }
+  h.setSettings({
+    ...security,
+    env: { SECRET: 'test-only' },
+    hooks: { SessionStart: [] },
+    model: 'opus',
+  })
+  await h.command()
+  expect(h.launchOptions[0].securitySettings).toEqual(security)
+  expect(JSON.stringify(h.launchOptions[0])).not.toContain('test-only')
+  expect(h.launchOptions[0].securitySettings).not.toHaveProperty('hooks')
+  expect(h.launchOptions[0].model).toBe('sonnet')
 })

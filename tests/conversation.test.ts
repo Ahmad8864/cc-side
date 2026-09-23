@@ -190,6 +190,74 @@ test('permission decisions are once-only, abortable, and denied when the pane cl
   expect(h.chat.state.permissions).toHaveLength(0)
 })
 
+test('permission metadata crosses the bridge without persisting an allow rule', async () => {
+  const h = harness()
+  const metadata = {
+    title: 'Claude wants to run this command outside the sandbox',
+    description: 'The command can access files outside this project.',
+    decisionReason: 'Sandbox access was denied.',
+    blockedPath: '/outside',
+    mcpServer: { name: 'files', source: 'project' },
+    defaultToNo: true,
+  }
+  const pending = h.options.canUseTool!(
+    'Bash',
+    { command: 'echo test' },
+    {
+      ...metadata,
+      signal: new AbortController().signal,
+      toolUseID: 'tool',
+      requestId: 'request',
+      suppressAlwaysAllowRule: true,
+      suggestions: [
+        {
+          type: 'addRules',
+          rules: [{ toolName: 'Bash' }],
+          behavior: 'allow',
+          destination: 'session',
+        },
+      ],
+    },
+  )
+  const permission = h.chat.state.permissions[0]!
+  expect(permission).toMatchObject(metadata)
+  h.chat.decide(permission.id, true)
+  expect(await pending).toEqual({ behavior: 'allow', updatedInput: { command: 'echo test' } })
+  h.chat.close()
+})
+
+test('inherited sandbox restrictions fail closed when sandboxing is unavailable', () => {
+  const securitySettings = {
+    permissions: { deny: ['Read(.env)'], ask: ['Bash(*)'] },
+    sandbox: { enabled: true, network: { allowedDomains: ['example.com'] } },
+  }
+  const h = harness({ securitySettings })
+  expect(h.options.settings).toEqual(securitySettings)
+  expect(h.options.sandbox).toMatchObject({
+    enabled: true,
+    failIfUnavailable: true,
+    network: { allowedDomains: ['example.com'] },
+  })
+  h.chat.close()
+})
+
+test('restrictive configured modes survive startup without enabling permission bypass', () => {
+  for (const defaultMode of [
+    'plan',
+    'dontAsk',
+    'acceptEdits',
+    'bypassPermissions',
+    'auto',
+  ] as const) {
+    const h = harness({ securitySettings: { permissions: { defaultMode } } })
+    expect(h.options.permissionMode).toBe(
+      defaultMode === 'plan' || defaultMode === 'dontAsk' ? defaultMode : 'default',
+    )
+    expect(h.options.allowDangerouslySkipPermissions).not.toBe(true)
+    h.chat.close()
+  }
+})
+
 test('tool output updates the tool row without becoming a user message', () => {
   const { chat } = harness()
   chat.accept(

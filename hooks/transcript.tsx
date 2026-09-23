@@ -1,6 +1,6 @@
 import type { Elements } from 'claude-code'
 import type { ChatMessage, Permission } from '../shared/protocol.ts'
-import { layout } from '../shared/editor.ts'
+import { cleanInput, layout } from '../shared/editor.ts'
 import { questionsFor } from '../shared/questions.ts'
 import { toolDisplay } from '../shared/tool-display.ts'
 
@@ -114,10 +114,26 @@ export function renderPermissions(
         return (
           <Box key={permission.id} flexDirection="column" borderStyle="round" paddingX={1}>
             <Text bold color="warning">
-              {permission.tool === 'AskUserQuestion'
-                ? 'Claude has a question'
-                : `Allow ${permission.tool}?`}
+              {cleanInput(
+                permission.title ??
+                  (permission.tool === 'AskUserQuestion'
+                    ? 'Claude has a question'
+                    : `Allow ${permission.tool}?`),
+              )}
             </Text>
+            {permission.description ? <Text>{cleanInput(permission.description)}</Text> : null}
+            {permission.decisionReason ? (
+              <Text>{cleanInput(permission.decisionReason)}</Text>
+            ) : null}
+            {permission.blockedPath ? (
+              <Text>Path: {cleanInput(permission.blockedPath)}</Text>
+            ) : null}
+            {permission.mcpServer ? (
+              <Text dimColor>
+                MCP: {cleanInput(permission.mcpServer.name)} (
+                {cleanInput(permission.mcpServer.source)})
+              </Text>
+            ) : null}
             {questions.length ? (
               questions.map((q, index) => (
                 <Box key={`${permission.id}-${index}`} flexDirection="column" marginBottom={1}>
@@ -162,6 +178,14 @@ export function renderPermissions(
             )}
             <Box gap={2}>
               <Button
+                key={`deny-${permission.id}`}
+                label="Deny"
+                autoFocus={permission.defaultToNo ? true : undefined}
+                onPress={async () => {
+                  await actions.decide(permission.id, false)
+                }}
+              />
+              <Button
                 key={`allow-${permission.id}`}
                 label={permission.tool === 'AskUserQuestion' ? 'Send answer' : 'Allow once'}
                 onPress={async () => {
@@ -175,13 +199,6 @@ export function renderPermissions(
                     true,
                     permission.tool === 'AskUserQuestion' ? answers[permission.id] : undefined,
                   )
-                }}
-              />
-              <Button
-                key={`deny-${permission.id}`}
-                label="Deny"
-                onPress={async () => {
-                  await actions.decide(permission.id, false)
                 }}
               />
             </Box>

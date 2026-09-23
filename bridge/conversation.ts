@@ -1,5 +1,6 @@
 import {
   query,
+  type CanUseTool,
   type PermissionResult,
   type SDKMessage,
   type SDKUserMessage,
@@ -46,6 +47,7 @@ export class Conversation {
     }
     delete env.CLAUDECODE
     delete env.CC_SIDE_TRACE
+    const configuredMode = options.securitySettings?.permissions?.defaultMode
     this.agent = createQuery({
       prompt: this.input,
       options: {
@@ -63,12 +65,17 @@ export class Conversation {
         model: options.model,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         settingSources: options.settingSources ?? ['user', 'project', 'local'],
-        permissionMode: 'default',
+        settings: options.securitySettings,
+        ...(options.securitySettings?.sandbox?.enabled
+          ? { sandbox: { ...options.securitySettings.sandbox, failIfUnavailable: true } }
+          : {}),
+        permissionMode:
+          configuredMode === 'plan' || configuredMode === 'dontAsk' ? configuredMode : 'default',
         ...(options.isolatedTest
           ? { strictMcpConfig: true, mcpServers: {}, effort: 'low' as const }
           : {}),
         env,
-        canUseTool: (tool, input, { signal }) => this.requestPermission(tool, input, signal),
+        canUseTool: (tool, input, context) => this.requestPermission(tool, input, context),
         stderr: (text) => {
           // Do not log credentials, prompts, or model output to disk.
           if (text.includes('Error') && this.state.status === 'starting')
@@ -83,8 +90,10 @@ export class Conversation {
   private requestPermission(
     tool: string,
     input: Record<string, unknown>,
-    signal: AbortSignal,
+    context: Parameters<CanUseTool>[2],
   ): Promise<PermissionResult> {
+    const { signal, title, description, decisionReason, blockedPath, mcpServer, defaultToNo } =
+      context
     return new Promise((resolve) => {
       if (this.closed || signal.aborted) {
         resolve({ behavior: 'deny', message: 'Side chat closed or request cancelled' })
@@ -101,7 +110,17 @@ export class Conversation {
       }
       const abort = () => settle({ behavior: 'deny', message: 'Request cancelled' })
       this.approvals.set(id, settle)
-      this.state.permissions.push({ id, tool, input })
+      this.state.permissions.push({
+        id,
+        tool,
+        input,
+        title,
+        description,
+        decisionReason,
+        blockedPath,
+        mcpServer,
+        defaultToNo,
+      })
       this.state.status = 'permission'
       this.changed()
       signal.addEventListener('abort', abort, { once: true })

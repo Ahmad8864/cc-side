@@ -1,3 +1,7 @@
+import type { Settings } from '@anthropic-ai/claude-agent-sdk'
+
+export type SecuritySettings = Pick<Settings, 'permissions' | 'sandbox'>
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant' | 'tool'
@@ -14,7 +18,17 @@ export type Usage = {
   cache_read_input_tokens: number
   cache_creation_input_tokens: number
 }
-export type Permission = { id: string; tool: string; input: Record<string, unknown> }
+export type Permission = {
+  id: string
+  tool: string
+  input: Record<string, unknown>
+  title?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  mcpServer?: { name: string; source: string }
+  defaultToNo?: boolean
+}
 export type SideCommand = {
   name: string
   description: string
@@ -62,6 +76,7 @@ export type StartOptions = {
   model: string
   ownerPid?: number
   settingSources?: ('user' | 'project' | 'local')[]
+  securitySettings?: SecuritySettings
   isolatedTest?: boolean
 }
 export type Endpoint = { url: string; token: string; pid: number }

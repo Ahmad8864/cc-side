@@ -51,7 +51,10 @@ its automatic sizing.
   pane alone makes no model request. `/side stats` shows per-request cache usage.
 - The chats share a working directory: file changes survive closing the side.
   The child transcript is not resumable, but tool files and configured logging
-  can persist. Session-only permissions and CLI-only settings are not all inherited.
+  can persist.
+- Permission and sandbox settings are copied when the pane opens. Session-only
+  rules, CLI tool restrictions, and live mode changes are not reliably inherited.
+  Main-chat plan mode does not guarantee that the side is read-only.
 - This is a macOS prototype. Long histories, attachments, every Claude command,
   and other terminals/platforms have not been exhaustively tested.
 

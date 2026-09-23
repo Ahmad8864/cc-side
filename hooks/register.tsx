@@ -29,6 +29,7 @@ export const register: Register = (on) => {
     after: (ms: number, fn: () => void) => void
     scroll: () => void
     reveal: (key: string) => void
+    focus: (key: string) => Promise<void>
     closePane: () => Promise<void>
   }
   let opened = false
@@ -52,6 +53,7 @@ export const register: Register = (on) => {
   let composerRows = 40
   let viewportColumns = 0
   const expanded = new Set<string>()
+  let focusedPermission: string | undefined
   const composerProps = (): ComposerProps => ({
     epoch: generation,
     seed: draft,
@@ -229,6 +231,9 @@ export const register: Register = (on) => {
       reveal: (key) => {
         void $.ui.scroll({ in: PANE, to: { key } })
       },
+      focus: async (key) => {
+        await $.ui.focus({ requestId: PANE, key })
+      },
       // Discard explicitly: hiding the host pane is not our state lifecycle.
       closePane: async () => {
         await close()
@@ -329,6 +334,15 @@ export const register: Register = (on) => {
     }
     const elements = await $.ui.resolve(e)
     const { Box, Text, Button, Client } = elements
+    const cautious = state.permissions.find((permission) => permission.defaultToNo)?.id
+    if (cautious !== focusedPermission) {
+      focusedPermission = cautious
+      if (cautious)
+        host.after(80, () => {
+          if (opened && state.permissions.some((permission) => permission.id === cautious))
+            void host.focus(`deny-${cautious}`)
+        })
+    }
     const busy = sending || state.status === 'working' || state.status === 'permission'
     const columns = e.props.bodyColumns - 2
     composerColumns = columns
@@ -511,11 +525,13 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
     async options(): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
+      const { permissions, sandbox } = await $.settings.read()
       return {
         parentSessionId: await $.session.id(),
         cwd: await $.session.cwd(),
         model: await $.session.model(),
         allowEmptyParent: (await $.session.messages()).length === 0,
+        securitySettings: { permissions, sandbox } as StartOptions['securitySettings'],
         ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),
       }
     },
