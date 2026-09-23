@@ -1,21 +1,7 @@
 import { expect, test } from 'bun:test'
 import { register } from '../hooks/register.tsx'
 import type { ChatState } from '../shared/protocol.ts'
-
-type Tree = { tag: string; props: Record<string, any>; children: unknown[] }
-Object.assign(globalThis, {
-  h: (tag: string, props: Record<string, unknown>, ...children: unknown[]): Tree => ({
-    tag,
-    props: props ?? {},
-    children,
-  }),
-})
-function nodes(value: unknown): Tree[] {
-  if (Array.isArray(value)) return value.flatMap(nodes)
-  if (!value || typeof value !== 'object') return []
-  const node = value as Tree
-  return [node, ...node.children.flatMap(nodes)]
-}
+import { nodes } from './tree.ts'
 
 // Exercise the real pane hooks, including Button callbacks. The host can hide
 // a pane without echoing ui.close back to the caller; hiding is not disposal.

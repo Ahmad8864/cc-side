@@ -1,17 +1,10 @@
 import { expect, test } from 'bun:test'
 import Composer, { type ComposerProps } from '../hooks/composer.tsx'
 import { localCommands } from '../shared/commands.ts'
+import { nodes, type Tree } from './tree.ts'
 
 // Exercise the actual drawing-thread module, including post coalescing and
 // keyboard handlers. Pixel layout/focus is checked separately in the real PTY.
-type Tree = { tag: string; props: Record<string, unknown>; children: unknown[] }
-Object.assign(globalThis, {
-  h: (tag: string, props: Record<string, unknown>, ...children: unknown[]): Tree => ({
-    tag,
-    props: props ?? {},
-    children,
-  }),
-})
 function harness(seed = '') {
   let key!: (value: { key: string; shift?: true; ctrl?: true }) => void
   let pointer!: (value: { type: string; button: string; x: number; y: number }) => void
@@ -72,14 +65,8 @@ function harness(seed = '') {
     click: () => pointer({ type: 'down', button: 'left', x: 2, y: 1 }),
   }
 }
-function flatten(node: unknown): Tree[] {
-  if (Array.isArray(node)) return node.flatMap(flatten)
-  if (!node || typeof node !== 'object') return []
-  const tree = node as Tree
-  return [tree, ...tree.children.flatMap(flatten)]
-}
 function menuRows(node: unknown) {
-  return flatten(node)
+  return nodes(node)
     .filter((n) => n.children.includes('› ') || n.children.includes('  '))
     .map((n) => n.children.filter((c) => typeof c === 'string').join(''))
 }
@@ -91,7 +78,7 @@ test('cursor stays visible after Client focus transfer and Shift+Enter grows the
   h.key({ key: 'return', shift: true })
   h.key({ key: 'second' })
   expect(h.posts.at(-1).text).toBe('first\nsecond')
-  expect(flatten(h.render()).some((n) => n.props.inverse === true)).toBe(true)
+  expect(nodes(h.render()).some((n) => n.props.inverse === true)).toBe(true)
 })
 
 test('pending sends survive coalescing, repeated Enter does not submit twice, and failure preserves the draft', () => {
@@ -145,7 +132,7 @@ test('activity frames repaint without posting draft messages; idle stays still',
   h.props.activity = { phase: 'thinking', startedAt: Date.now() - 2000 }
   const tree = h.render()
   expect(
-    flatten(tree)
+    nodes(tree)
       .flatMap((n) => n.children)
       .join(''),
   ).toContain('Thinking')
