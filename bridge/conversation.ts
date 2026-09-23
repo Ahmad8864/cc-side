@@ -468,6 +468,7 @@ export class Conversation {
         this.stopping = false
       } else if (message.subtype !== 'success')
         this.state.error = message.errors?.join('\n') ?? 'The side turn ended without a reply'
+      else if (message.is_error) this.state.error = message.result || 'The side turn failed'
     }
     this.changed()
   }

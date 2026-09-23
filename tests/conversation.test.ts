@@ -378,6 +378,23 @@ test('an intentional stop is shown as stopped, and a follow-up clears the notice
   chat.close()
 })
 
+test('an API error that ends a turn shows its message', () => {
+  const { chat } = harness()
+  chat.send('Question')
+  chat.accept(
+    event({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      result: 'API Error: 529 Overloaded',
+      usage: {},
+    }),
+  )
+  expect(chat.state.status).toBe('error')
+  expect(chat.state.error).toBe('API Error: 529 Overloaded')
+  chat.close()
+})
+
 test('first slash command reaches the dispatcher unchanged, then normal text gets the side instruction', async () => {
   const h = harness(),
     input = h.input[Symbol.asyncIterator]()
