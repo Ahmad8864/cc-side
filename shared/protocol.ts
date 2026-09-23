@@ -4,6 +4,8 @@ export type ChatMessage = {
   text: string
   toolName?: string
   toolInput?: string
+  outputTruncated?: boolean
+  elapsedSeconds?: number
   status?: 'running' | 'done' | 'error' | 'cancelled'
 }
 export type Usage = {

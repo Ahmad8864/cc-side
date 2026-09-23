@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
+import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk'
 import { prepareStart } from '../bridge/prepare.ts'
 
 const options = {
@@ -36,6 +37,37 @@ test('unavailable history of a nonempty parent never silently becomes an empty c
       throw new Error('Cannot read transcript')
     }),
   ).rejects.toThrow('Cannot read transcript')
+})
+
+test('a running tool forks from completed context without replaying the pending tool', async () => {
+  const entry = (type: SessionMessage['type'], uuid: string, content: unknown): SessionMessage => ({
+    type,
+    uuid,
+    session_id: options.parentSessionId,
+    message: { content },
+    parent_tool_use_id: null,
+    parent_agent_id: null,
+  })
+  const history = [
+    entry('user', 'prompt', 'Build the rate limiter'),
+    entry('assistant', 'read', [{ type: 'tool_use', id: 'read-config' }]),
+    entry('user', 'config', [
+      { type: 'tool_result', tool_use_id: 'read-config', content: 'burst: 12' },
+    ]),
+    entry('assistant', 'working', [{ type: 'text', text: 'Running two checks.' }]),
+    entry('assistant', 'checks', [
+      { type: 'tool_use', id: 'lint' },
+      { type: 'tool_use', id: 'load-test' },
+    ]),
+    entry('user', 'lint-done', [{ type: 'tool_result', tool_use_id: 'lint', content: 'Passed' }]),
+  ]
+  expect((await prepareStart(options, async () => history)).resumeSessionAt).toBe('config')
+  history.push(
+    entry('user', 'load-done', [
+      { type: 'tool_result', tool_use_id: 'load-test', content: 'Passed' },
+    ]),
+  )
+  expect((await prepareStart(options, async () => history)).resumeSessionAt).toBe('load-done')
 })
 
 test('startup failure crosses the launcher as a readable error without a Bun stack trace', async () => {

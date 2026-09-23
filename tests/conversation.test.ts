@@ -214,6 +214,47 @@ test('tool output updates the tool row without becoming a user message', () => {
   chat.close()
 })
 
+test('tool progress is scoped to root calls and late progress cannot revive a completed call', () => {
+  const { chat } = harness()
+  const progress = {
+    type: 'tool_progress',
+    tool_use_id: 't',
+    tool_name: 'Custom',
+    elapsed_time_seconds: 3,
+  }
+  chat.accept(event({ ...progress, parent_tool_use_id: 'child' }))
+  expect(chat.state.messages).toHaveLength(0)
+  chat.accept(event({ ...progress, parent_tool_use_id: null }))
+  expect(chat.state.messages[0]).toMatchObject({
+    toolName: 'Custom',
+    status: 'running',
+    elapsedSeconds: 3,
+  })
+  chat.accept(
+    event({
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 't',
+            is_error: true,
+            content: [{ type: 'text', text: 'start\n' + 'x'.repeat(10000) + '\nFailure details' }],
+          },
+        ],
+      },
+    }),
+  )
+  chat.accept(event({ ...progress, parent_tool_use_id: null, elapsed_time_seconds: 9 }))
+  expect(chat.state.messages[0]).toMatchObject({
+    status: 'error',
+    elapsedSeconds: 3,
+    outputTruncated: true,
+  })
+  expect(chat.state.messages[0].text).toEndWith('Failure details')
+  chat.close()
+})
+
 test('shutdown releases a waiting input reader and rejects further pushes', async () => {
   const queue = new AsyncQueue<string>()
   const wait = queue[Symbol.asyncIterator]().next()

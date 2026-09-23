@@ -23,6 +23,7 @@ async function harness(
   initialStatus: ChatState['status'] = 'ready',
   permissions: ChatState['permissions'] = [],
   developmentBun?: string,
+  messages: ChatState['messages'] = [],
 ) {
   const handlers = new Map<string, (...args: any[]) => any>()
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
@@ -32,6 +33,8 @@ async function harness(
   const requests: { path: string; body: any; url: string }[] = []
   const opens: any[] = []
   const launches: string[][] = []
+  const timers: (() => void)[] = []
+  const scrolls: unknown[] = []
   let prompt = ''
   let state: ChatState
   const $ = {
@@ -51,7 +54,7 @@ async function harness(
           revision: 1,
           status: initialStatus,
           model: 'sonnet',
-          messages: [],
+          messages: structuredClone(messages),
           permissions,
           requests: [],
           textDeltas: 0,
@@ -80,7 +83,9 @@ async function harness(
     },
     ui: {
       invalidate() {},
-      scroll: async () => {},
+      scroll: async (args: unknown) => {
+        scrolls.push(args)
+      },
       open: async (args: any) => {
         hidden = false
         opens.push(args)
@@ -93,7 +98,7 @@ async function harness(
           ['Box', 'Text', 'Markdown', 'Input', 'Button', 'Client'].map((name) => [name, name]),
         ),
     },
-    clock: { after() {} },
+    clock: { after: (_ms: number, fn: () => void) => timers.push(fn) },
     fs: { write: async () => {} },
     command: { register: async () => {} },
     prompt: {
@@ -142,6 +147,8 @@ async function harness(
     requests,
     opens,
     launches,
+    timers,
+    scrolls,
     prompt: () => prompt,
     setPrompt: (text: string) => {
       prompt = text
@@ -309,6 +316,48 @@ test('tool permission controls send the explicit allow or deny decision', async 
     await tree.find((n) => n.props.key === `${allow ? 'allow' : 'deny'}-tool`)!.props.onPress()
     expect(h.requests.find((r) => r.path === '/permission')?.body).toEqual({ id: 'tool', allow })
   }
+})
+
+test('tool details expand and collapse without replacing the composer or losing its draft', async () => {
+  const h = await harness('ready', [], undefined, [
+    {
+      id: 'call',
+      role: 'tool',
+      toolName: 'mcp__jobs__run',
+      toolInput: JSON.stringify({ id: 'job_42', settings: { enabled: false } }),
+      text: 'Request started\nRequest failed\nInvalid job ID: job_42',
+      status: 'error',
+      outputTruncated: true,
+    },
+  ])
+  await h.command()
+  const editor = await h.editor()
+  await h.invoke('ui.message', {
+    requestId: 'side',
+    element: editor.props.key,
+    data: { epoch: editor.props.props.epoch, instance: 'draft', seq: 1, text: 'Keep this draft' },
+  })
+  let tree = await h.render()
+  expect(JSON.stringify(tree)).toContain('Invalid job ID: job_42')
+  expect(JSON.stringify(tree)).not.toContain('Request started')
+  expect(tree.some((n) => n.tag === 'Text' && n.props.color === 'error')).toBe(true)
+  await tree.find((n) => n.props.key === 'tool-call')!.props.onPress()
+  h.timers.at(-1)!()
+  expect(h.scrolls.at(-1)).toEqual({ in: 'side', to: { key: 'call' } })
+  tree = await h.render()
+  expect(JSON.stringify(tree)).toContain('Request started')
+  expect(tree.some((n) => n.children.includes(' (truncated)'))).toBe(true)
+  expect(
+    tree.some((n) =>
+      n.children.some((c) => typeof c === 'string' && c.includes('"enabled": false')),
+    ),
+  ).toBe(true)
+  await tree.find((n) => n.props.key === 'tool-call')!.props.onPress()
+  expect(JSON.stringify(await h.render())).not.toContain('Request started')
+  const after = await h.editor()
+  expect(after.props.key).toBe(editor.props.key)
+  expect(after.props.props.seed).toBe('Keep this draft')
+  expect(h.requests.some((r) => r.path === '/send')).toBe(false)
 })
 
 test('installed plugins launch the packaged helper; Bun is an explicit development override', async () => {

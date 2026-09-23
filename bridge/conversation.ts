@@ -8,6 +8,7 @@ import {
 import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, modelLabel, parseCommand } from '../shared/commands.ts'
+import { toolOutput } from './tool-output.ts'
 
 export class Conversation {
   readonly state: ChatState = {
@@ -388,13 +389,10 @@ export class Conversation {
       if (block.type !== 'tool_result') continue
       const tool = this.blocks.get(block.tool_use_id)
       if (!tool) continue
-      const content = block.content ?? ''
+      const output = toolOutput(this.stopping ? 'Stopped by you.' : block.content)
       tool.status = this.stopping ? 'cancelled' : block.is_error ? 'error' : 'done'
-      tool.text = this.stopping
-        ? 'Stopped by you.'
-        : typeof content === 'string'
-          ? content.slice(0, 3000)
-          : JSON.stringify(content).slice(0, 3000)
+      tool.text = output.text
+      tool.outputTruncated = output.truncated
     }
   }
 
@@ -425,6 +423,9 @@ export class Conversation {
       if (message.status === 'requesting') this.activity('requesting')
     } else if (message.type === 'stream_event' && !message.parent_tool_use_id) {
       this.acceptStream(message)
+    } else if (message.type === 'tool_progress' && !message.parent_tool_use_id) {
+      const tool = this.block(message.tool_use_id, 'tool', message.tool_name)
+      if (tool.status === 'running') tool.elapsedSeconds = message.elapsed_time_seconds
     } else if (message.type === 'assistant' && !message.parent_tool_use_id) {
       this.acceptAssistant(message)
     } else if (

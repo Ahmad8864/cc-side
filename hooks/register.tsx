@@ -28,6 +28,7 @@ export const register: Register = (on) => {
     invalidate: () => void
     after: (ms: number, fn: () => void) => void
     scroll: () => void
+    reveal: (key: string) => void
     closePane: () => Promise<void>
   }
   let opened = false
@@ -81,7 +82,7 @@ export const register: Register = (on) => {
         host.invalidate()
         if (follow)
           host.after(80, () => {
-            if (opened) host.scroll()
+            if (opened && follow) host.scroll()
           })
       }
     } catch (error) {
@@ -225,6 +226,9 @@ export const register: Register = (on) => {
       scroll: () => {
         void $.ui.scroll({ in: PANE, to: 'end' })
       },
+      reveal: (key) => {
+        void $.ui.scroll({ in: PANE, to: { key } })
+      },
       // Discard explicitly: hiding the host pane is not our state lifecycle.
       closePane: async () => {
         await close()
@@ -345,7 +349,20 @@ export const register: Register = (on) => {
           </Box>
         </Box>
         <Box flexDirection="column" flexGrow={1} paddingTop={1} width={columns}>
-          {renderMessages(elements, state.messages, columns, expanded, host.invalidate)}
+          {renderMessages(
+            elements,
+            state.messages,
+            columns,
+            expanded,
+            (key) => {
+              follow = false
+              host.invalidate()
+              host.after(80, () => {
+                if (opened) host.reveal(key)
+              })
+            },
+            state.cwd,
+          )}
         </Box>
         {/* Keep the editor's ancestor/sibling positions stable. The terminal
           focus region can remount when conditional siblings appear. */}
