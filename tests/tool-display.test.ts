@@ -130,4 +130,5 @@ test('large output retains both ends and marks truncation; terminal escape codes
   expect(output.text.length).toBeLessThan(6100)
   expect(output.text).not.toContain('\u001b')
   expect(toolOutput('\u001b]0;hidden title\u0007visible\ttext').text).toBe('visible  text')
+  expect(toolOutput('\u001b]0;hidden title\u001b\\visible').text).toBe('visible')
 })

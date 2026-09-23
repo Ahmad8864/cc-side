@@ -1,4 +1,3 @@
-import { stripVTControlCharacters } from 'node:util'
 import { cleanText } from '../shared/editor.ts'
 
 const outputLimit = 6000
@@ -21,7 +20,8 @@ function contentText(content: unknown): string {
 }
 
 export function toolOutput(content: unknown) {
-  const text = cleanText(stripVTControlCharacters(contentText(content)))
+  // Unlike Node's stripVTControlCharacters, this also removes a title sequence's text.
+  const text = cleanText(Bun.stripANSI(contentText(content)))
   const truncated = text.length > outputLimit
   return {
     text: truncated
