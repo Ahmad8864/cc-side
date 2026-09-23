@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { completions } from '../shared/commands.ts'
+import { commandCatalog, completions, parseCommand } from '../shared/commands.ts'
 import { modelLabel } from '../shared/models.ts'
 import type { SideModel } from '../shared/protocol.ts'
 
@@ -26,6 +26,44 @@ const models: SideModel[] = [
     description: 'Fastest for quick answers',
   },
 ]
+
+test('commands keep arguments intact and discover runtime skills plus side controls', () => {
+  const commands = commandCatalog([
+    { name: 'review', description: 'Review files', argumentHint: '[files]' },
+  ])
+  expect(parseCommand('/review first.ts\nsecond.ts')).toEqual({
+    name: 'review',
+    args: 'first.ts\nsecond.ts',
+  })
+  expect(completions('/rev', commands, { models: [] })[0].value).toBe('/review ')
+  expect(
+    completions('/model ', commands, {
+      models: [{ value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5' }],
+    })[0],
+  ).toMatchObject({ value: '/model sonnet', execute: true })
+  expect(completions('text /model', commands, { models: [] })).toEqual([])
+})
+
+test('model and effort pickers handle mixed-case command names without switching commands', () => {
+  const haiku = [
+    {
+      value: 'haiku',
+      displayName: 'Haiku',
+      description: 'Haiku 4',
+      supportedEffortLevels: ['low', 'high'],
+    },
+  ]
+  for (const name of ['model', 'MODEL', 'Model']) {
+    expect(completions(`/${name} `, [], { models: haiku }).map((c) => c.value)).toEqual([
+      '/model haiku',
+    ])
+  }
+  for (const name of ['effort', 'EFFORT', 'Effort']) {
+    expect(
+      completions(`/${name} `, [], { models: haiku, model: 'haiku' }).map((c) => c.value),
+    ).toEqual(['/effort low', '/effort high', '/effort auto'])
+  }
+})
 
 test('model labels name the model whether or not its description starts with the version', () => {
   expect(modelLabel('claude-opus-5-5', models)).toBe('Opus 5.5')
