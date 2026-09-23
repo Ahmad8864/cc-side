@@ -3,6 +3,12 @@ import type { ChatMessage } from './protocol.ts'
 
 const detailLimit = 6000
 
+/** A path inside the project as the project names it; Windows paths may use either separator. */
+export function projectPath(path: string, cwd?: string) {
+  const inside = cwd && path.startsWith(cwd) && /^[\\/]./.test(path.slice(cwd.length))
+  return inside ? path.slice(cwd.length + 1) : path
+}
+
 export function truncateLine(text: string, columns: number): string {
   const chars = glyphs(cleanText(text).replace(/\s+/g, ' ').trim())
   if (chars.reduce((width, glyph) => width + glyph.width, 0) <= columns)
@@ -31,7 +37,7 @@ function compactValue(value: unknown, cwd?: string): string {
     const text = cleanText(value).trim()
     const lines = text.split('\n').length
     if (lines > 1) return `${lines} lines`
-    return truncateLine(cwd && text.startsWith(cwd + '/') ? text.slice(cwd.length + 1) : text, 60)
+    return truncateLine(projectPath(text, cwd), 60)
   }
   if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? 'item' : 'items'}`
   if (value !== null && typeof value === 'object') {

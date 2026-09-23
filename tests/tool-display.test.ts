@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { toolDisplay, truncateLine } from '../shared/tool-display.ts'
+import { projectPath, toolDisplay, truncateLine } from '../shared/tool-display.ts'
 import { glyphs } from '../shared/editor.ts'
 import { toolOutput } from '../bridge/tool-output.ts'
 import type { ChatMessage } from '../shared/protocol.ts'
@@ -27,6 +27,14 @@ test('the same JSON shape renders for built-in and unknown tools without a tool 
   expect(toolDisplay(message({ path: '/project-other/main.ts' }), 80, '/project').label).toContain(
     '/project-other/main.ts',
   )
+})
+
+test('project paths are shown relative to the project, with either separator', () => {
+  expect(projectPath('/project/src/main.ts', '/project')).toBe('src/main.ts')
+  expect(projectPath('C:\\project\\src\\main.ts', 'C:\\project')).toBe('src\\main.ts')
+  expect(projectPath('/project-other/main.ts', '/project')).toBe('/project-other/main.ts')
+  expect(projectPath('/project/', '/project')).toBe('/project/')
+  expect(projectPath('/project/main.ts')).toBe('/project/main.ts')
 })
 
 test('large payloads stay compact while expanded input preserves strings, objects, and falsy values', () => {

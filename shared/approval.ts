@@ -1,7 +1,7 @@
 import { cleanText } from './editor.ts'
 import { clip } from './limits.ts'
 import type { Permission } from './protocol.ts'
-import { inputDetails } from './tool-display.ts'
+import { inputDetails, projectPath } from './tool-display.ts'
 
 // Room for one approval's code, well inside a drawn string's limit.
 const codeLimit = 6000
@@ -24,8 +24,7 @@ export function approvalParts(
   cwd?: string,
 ): ApprovalPart[] {
   const path = [input.file_path, input.notebook_path].find((value) => typeof value === 'string')
-  const shown =
-    path && cleanText(cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path)
+  const shown = path && cleanText(projectPath(path, cwd))
   // Claude's approval description is often the file itself.
   const file: ApprovalPart[] =
     shown && description !== shown && description !== path ? [{ kind: 'file', path: shown }] : []
