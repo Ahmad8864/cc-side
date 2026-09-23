@@ -4,7 +4,7 @@ A temporary side chat for Claude Code. Run `/side` to open a second conversation
 on the right, with the main chat's context and its own tools, model, and follow-ups.
 Closing it discards the conversation.
 
-![Side chat in Claude Code](docs/side-chat.png)
+https://github.com/user-attachments/assets/3d79f8cc-e0b9-488d-becf-f2fd809dee71
 
 ## Install
 
@@ -32,6 +32,7 @@ Mods APIs can change between releases.
 - Click the composer to type. Enter sends; Shift+Enter adds a line.
 - Type `/` for commands and project skills. `/model` and `/effort` affect only the side.
 - Tools request approval in the pane. Stop interrupts the current reply.
+- Tool rows show compact arguments and output. Click a row to expand its details.
 - Escape returns to main. Close, ×, or `/side close` discards the side chat and draft.
 - A rejected `/side` question returns to the main prompt for retry. It is not queued.
 
