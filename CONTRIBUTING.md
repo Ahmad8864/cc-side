@@ -22,6 +22,7 @@ bun run dev         # run the source plugin
 - `hooks/permissions.tsx`: approvals and Claude's questions.
 - `hooks/composer.tsx`: the drawing-thread editor and activity indicator.
 - `bridge/conversation.ts`: the Agent SDK session, commands, and streamed events.
+- `bridge/instructions.ts`: what the side's Claude is told besides the user's messages.
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
 - `shared/`: protocol types, commands, model labels, and pure text/layout operations.
 - `types/`: generated Mods declarations; see its upstream note before updating.

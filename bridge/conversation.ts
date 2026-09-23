@@ -15,29 +15,10 @@ import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { toolOutput } from './tool-output.ts'
 import { editStarts } from './edit-starts.ts'
 import sessionEnv from '../shared/session-env.json'
+import { earlierDiscussion, editingNote, editingOff, sideInstruction } from './instructions.ts'
 
 // Claude's own file-changing tools, which a read-only side chat refuses.
 const editTools = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
-const sidePurpose =
-  'The user opened a separate side chat from this conversation. Use the inherited context to answer their questions directly here, without continuing the parent task. Do not message other sessions unless the user asks.'
-const editingOn =
-  'You may edit files here, but the main conversation works in the same directory, so change only what the user asks.'
-const editingOff =
-  'File edits are blocked in this side chat: read and search freely, and describe changes instead of making them. The user can allow edits with /edit on.'
-const discussionLimit = 20000
-
-// A refresh carries the side's questions and answers as text; tool results stay behind.
-function earlierDiscussion(messages: ChatMessage[]) {
-  const turns = messages
-    .filter(
-      (m) => (m.role === 'user' && !parseCommand(m.text)) || (m.role === 'assistant' && !m.local),
-    )
-    .map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${m.text}`)
-    .join('\n\n')
-  if (!turns) return ''
-  const recent = turns.length > discussionLimit ? `…${turns.slice(-discussionLimit)}` : turns
-  return `This side chat was refreshed with the main conversation's latest context. Earlier in this side chat:\n\n${recent}`
-}
 
 export class Conversation {
   readonly state: ChatState = {
@@ -349,11 +330,8 @@ export class Conversation {
 
   // What Claude needs with the next message: the side's purpose, then any change to edits.
   private preface() {
-    const editing = this.state.canEdit ? editingOn : editingOff
-    if (this.needsSideInstruction)
-      return [`${sidePurpose} ${editing}`, this.earlier].filter(Boolean).join('\n\n')
-    if (this.editingChanged)
-      return `The user turned file edits ${this.state.canEdit ? 'on' : 'off'}. ${editing}`
+    if (this.needsSideInstruction) return sideInstruction(this.state.canEdit, this.earlier)
+    if (this.editingChanged) return editingNote(this.state.canEdit)
     return ''
   }
 
