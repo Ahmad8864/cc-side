@@ -440,21 +440,19 @@ export const register: Register = (on) => {
           </Box>
         </Box>
         <Box flexDirection="column" flexGrow={1} paddingTop={1} width={columns}>
-          {renderMessages(
-            elements,
-            state.messages,
+          {renderMessages(elements, state.messages, {
             columns,
             expanded,
-            (key) => {
+            onToggle: (key) => {
               follow = false
               host.invalidate()
               host.after(80, () => {
                 if (opened) host.reveal(key)
               })
             },
-            state.cwd,
+            cwd: state.cwd,
             budget,
-          )}
+          })}
         </Box>
         {/* Keep the editor's ancestor/sibling positions stable. The terminal
           focus region can remount when conditional siblings appear. */}

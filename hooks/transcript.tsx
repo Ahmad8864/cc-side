@@ -6,6 +6,14 @@ import { questionsFor } from '../shared/questions.ts'
 import { toolDisplay } from '../shared/tool-display.ts'
 
 type Answers = Record<string, Record<string, string>>
+export type MessageView = {
+  columns: number
+  expanded: Set<string>
+  onToggle: (key: string) => void
+  cwd?: string
+  // The drawing budget, in serialized characters, for the messages shown.
+  budget?: number
+}
 const messageLimit = 40000
 
 function toolStatus(status: ChatMessage['status']): string {
@@ -17,11 +25,7 @@ function toolStatus(status: ChatMessage['status']): string {
 export function renderMessages(
   elements: Elements['terminal'],
   messages: ChatMessage[],
-  columns: number,
-  expanded: Set<string>,
-  onToggle: (key: string) => void,
-  cwd?: string,
-  budget = treeLimit,
+  { columns, expanded, onToggle, cwd, budget = treeLimit }: MessageView,
 ) {
   const { Box, Text, Button, Markdown } = elements
   const draw = (message: ChatMessage) => {
