@@ -39,7 +39,10 @@ export const register: Register = (on) => {
     copy: (text: string) => Promise<boolean>
   }
   let opened = false
+  // generation names an opened side chat and its composer; connection names the
+  // helper serving it, which a refresh replaces without disturbing the composer.
   let generation = 0
+  let connection = 0
   let endpoint: Endpoint | undefined
   let state = empty()
   let draft = ''
@@ -123,10 +126,10 @@ export const register: Register = (on) => {
     writes = writes.then(() => host.write(tracePath!, json)).catch(() => {})
   }
   const poll = async (epoch: number, failures = 0) => {
-    if (epoch !== generation || !endpoint) return
+    if (epoch !== connection || !endpoint) return
     try {
       const result: ChatState = await host.request(endpoint, '/state')
-      if (epoch !== generation) return
+      if (epoch !== connection) return
       if (result.revision > state.revision) {
         state = result
         rememberEditing()
@@ -138,7 +141,7 @@ export const register: Register = (on) => {
           })
       }
     } catch (error) {
-      if (epoch !== generation) return
+      if (epoch !== connection) return
       // A busy or waking machine can miss a request; a stopped helper misses them all.
       if (failures < 4) {
         host.after(1000, () => {
@@ -156,19 +159,19 @@ export const register: Register = (on) => {
   }
   const action = async (path: BridgePath, body?: unknown) => {
     if (!endpoint) return false
-    const epoch = generation
+    const epoch = connection
     try {
       const result: ChatState = await host.request(endpoint, path, body)
-      if (epoch === generation && result.revision >= state.revision) {
+      if (epoch === connection && result.revision >= state.revision) {
         state = result
         rememberEditing()
       }
-      return epoch === generation
+      return epoch === connection
     } catch (error) {
-      if (epoch === generation) localError = String(error)
+      if (epoch === connection) localError = String(error)
       return false
     } finally {
-      if (epoch === generation) host.invalidate()
+      if (epoch === connection) host.invalidate()
     }
   }
   const send = async (
@@ -193,10 +196,10 @@ export const register: Register = (on) => {
     localError = ''
     localNotice = ''
     answers = {}
-    const epoch = generation
+    const epoch = connection
     try {
       const result: ChatState = await host.request(endpoint, '/send', { id, text: text.trim() })
-      if (epoch !== generation) return false
+      if (epoch !== connection) return false
       draft = ''
       if (result.revision >= state.revision) {
         state = result
@@ -209,10 +212,10 @@ export const register: Register = (on) => {
       })
       return true
     } catch (error) {
-      if (epoch === generation) localError = error instanceof Error ? error.message : String(error)
+      if (epoch === connection) localError = error instanceof Error ? error.message : String(error)
       return false
     } finally {
-      if (epoch === generation) {
+      if (epoch === connection) {
         sending = false
         host.invalidate()
       }
@@ -224,37 +227,39 @@ export const register: Register = (on) => {
     state = empty()
     localError = ''
     follow = true
-    const epoch = ++generation
+    generation++
+    const epoch = ++connection
     receipt = null
     receipts.clear()
     pendingSubmissions.clear()
     host.invalidate()
     try {
       savedEditing = await host.readEditing()
-      const connection = await host.start(
+      const started = await host.start(
         await host.options({ effort: mainEffort, canEdit: savedEditing }),
       )
-      if (epoch !== generation) {
-        await host.request(connection, '/close')
+      if (epoch !== connection) {
+        await host.request(started, '/close')
         return
       }
-      endpoint = connection
-      trace('side.opened', { pid: connection.pid, placement: 'right' })
+      endpoint = started
+      trace('side.opened', { pid: started.pid, placement: 'right' })
       void poll(epoch)
     } catch (error) {
-      if (epoch === generation) {
+      if (epoch === connection) {
         localError = error instanceof Error ? error.message : String(error)
         state.status = 'error'
         host.invalidate()
       }
     } finally {
-      if (epoch === generation) connecting = false
+      if (epoch === connection) connecting = false
     }
   }
   const close = async () => {
     if (!opened && !endpoint && !connecting) return
     const old = endpoint
     generation++
+    connection++
     opened = false
     endpoint = undefined
     state = empty()
