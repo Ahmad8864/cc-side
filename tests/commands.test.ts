@@ -33,21 +33,26 @@ test('model labels name the model whether or not its description starts with the
 })
 
 test('/model completion ranks model names above description matches', () => {
-  const values = (text: string) => completions(text, [], models).map((c) => c.value)
+  const values = (text: string) => completions(text, [], { models }).map((c) => c.value)
   expect(values('/model opus')[0]).toBe('/model opus')
   expect(values('/model op')[0]).toBe('/model opus')
   expect(values('/model ')).toEqual(['/model default', '/model opus', '/model haiku'])
 })
 
 test('/effort completion offers only the levels the selected model supports', () => {
-  const levels = (model: string) => completions('/effort ', [], models, model).map((c) => c.label)
+  const levels = (model: string) =>
+    completions('/effort ', [], { models, model }).map((c) => c.label)
   expect(levels('claude-opus-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'auto'])
   expect(levels('claude-haiku-4-5-20251001')).toEqual(['auto'])
   expect(levels('claude-custom-model')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'auto'])
 })
 
 test('/effort completion names only the extremes and marks the current level', () => {
-  const menu = completions('/effort ', [], models, 'claude-opus-5-5', 'high')
+  const menu = completions('/effort ', [], {
+    models,
+    model: 'claude-opus-5-5',
+    effort: 'high',
+  })
   expect(menu.map((c) => [c.label, c.description])).toEqual([
     ['low', 'Fastest'],
     ['medium', ''],

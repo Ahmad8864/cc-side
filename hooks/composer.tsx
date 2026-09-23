@@ -30,8 +30,7 @@ type State = Editor & {
 }
 type IO = { state: State; props: ComposerProps; menu: Completion[]; send: () => void }
 const instances = new WeakMap<object, IO>()
-const menuFor = (text: string, props: ComposerProps) =>
-  completions(text, props.commands, props.models, props.model, props.effort)
+const menuFor = (text: string, props: ComposerProps) => completions(text, props.commands, props)
 
 function snapshot(io: IO, surface: ClientSurface<State>) {
   // A complete snapshot survives Client.post coalescing. The unacknowledged

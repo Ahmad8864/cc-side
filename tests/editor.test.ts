@@ -64,13 +64,13 @@ test('commands keep arguments intact and discover runtime skills plus side contr
     name: 'review',
     args: 'first.ts\nsecond.ts',
   })
-  expect(completions('/rev', commands, [])[0].value).toBe('/review ')
+  expect(completions('/rev', commands, { models: [] })[0].value).toBe('/review ')
   expect(
-    completions('/model ', commands, [
-      { value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5' },
-    ])[0],
+    completions('/model ', commands, {
+      models: [{ value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5' }],
+    })[0],
   ).toMatchObject({ value: '/model sonnet', execute: true })
-  expect(completions('text /model', commands, [])).toEqual([])
+  expect(completions('text /model', commands, { models: [] })).toEqual([])
 })
 
 test('model and effort pickers handle mixed-case command names without switching commands', () => {
@@ -83,10 +83,10 @@ test('model and effort pickers handle mixed-case command names without switching
     },
   ]
   for (const name of ['model', 'MODEL', 'Model']) {
-    expect(completions(`/${name} `, [], models).map((c) => c.value)).toEqual(['/model haiku'])
+    expect(completions(`/${name} `, [], { models }).map((c) => c.value)).toEqual(['/model haiku'])
   }
   for (const name of ['effort', 'EFFORT', 'Effort']) {
-    expect(completions(`/${name} `, [], models, 'haiku').map((c) => c.value)).toEqual([
+    expect(completions(`/${name} `, [], { models, model: 'haiku' }).map((c) => c.value)).toEqual([
       '/effort low',
       '/effort high',
       '/effort auto',

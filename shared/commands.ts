@@ -66,12 +66,12 @@ function modelRank(model: SideModel, query: string) {
 }
 
 export type Completion = { value: string; label: string; description: string; execute?: boolean }
+/** The side chat's current choices, which pickers list and mark. */
+export type SideSettings = { models: SideModel[]; model?: string; effort?: string }
 export function completions(
   text: string,
   commands: SideCommand[],
-  models: SideModel[],
-  model?: string,
-  effort?: string,
+  { models, model, effort }: SideSettings,
 ): Completion[] {
   if (!text.startsWith('/') || text.includes('\n')) return []
   const match = /^\/(model|effort)\s+(.*)$/i.exec(text)
