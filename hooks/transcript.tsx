@@ -30,6 +30,12 @@ export function renderMessages(
 ) {
   const { Box, Text, Button, Markdown } = elements
   const draw = (message: ChatMessage) => {
+    if (message.role === 'notice')
+      return (
+        <Box key={message.id} marginBottom={1}>
+          <Text dimColor>{`↻ ${message.text}`}</Text>
+        </Box>
+      )
     if (message.role === 'tool') {
       const details = toolDisplay(message, columns, cwd)
       const open = expanded.has(message.id)

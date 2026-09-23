@@ -9,7 +9,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk'
 import { Conversation } from '../bridge/conversation.ts'
 import { AsyncQueue } from '../bridge/queue.ts'
-import type { StartOptions } from '../shared/protocol.ts'
+import type { ChatMessage, StartOptions } from '../shared/protocol.ts'
 import { activityFrame } from '../shared/activity.ts'
 
 function harness(overrides: Partial<StartOptions> = {}) {
@@ -554,6 +554,29 @@ test('Claude learns the edit setting with the first message and with each change
   reply()
   h.chat.send('Third')
   expect((await input.next()).value.message.content).toBe('Third')
+  h.chat.close()
+})
+
+test('a refreshed side shows its discussion again and gives Claude the text once', async () => {
+  const carried: ChatMessage[] = [
+    { id: 'q', role: 'user', text: 'Why is the build slow?' },
+    { id: 't', role: 'tool', toolName: 'Read', text: 'build log', status: 'done' },
+    { id: 'a', role: 'assistant', text: 'The cache is cold.' },
+    { id: 'm', role: 'user', text: '/help' },
+    { id: 'h', role: 'assistant', text: 'Side chat help', local: true },
+  ]
+  const h = harness({ carried }),
+    input = h.input[Symbol.asyncIterator]()
+  expect(h.chat.state.messages.map((m) => m.id).slice(0, 5)).toEqual(['q', 't', 'a', 'm', 'h'])
+  expect(h.chat.state.messages.at(-1)).toMatchObject({ role: 'notice' })
+  h.chat.send('And now?')
+  const first = (await input.next()).value.message.content
+  expect(first).toContain('User: Why is the build slow?\n\nYou: The cache is cold.')
+  for (const left of ['build log', '/help', 'Side chat help']) expect(first).not.toContain(left)
+  expect(first).toEndWith('And now?')
+  h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  h.chat.send('Thanks')
+  expect((await input.next()).value.message.content).toBe('Thanks')
   h.chat.close()
 })
 

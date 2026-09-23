@@ -23,6 +23,20 @@ const editingOn =
   'You may edit files here, but the main conversation works in the same directory, so change only what the user asks.'
 const editingOff =
   'File edits are blocked in this side chat: read and search freely, and describe changes instead of making them. The user can allow edits with /edit on.'
+const discussionLimit = 20000
+
+// A refresh carries the side's questions and answers as text; tool results stay behind.
+function earlierDiscussion(messages: ChatMessage[]) {
+  const turns = messages
+    .filter(
+      (m) => (m.role === 'user' && !parseCommand(m.text)) || (m.role === 'assistant' && !m.local),
+    )
+    .map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${m.text}`)
+    .join('\n\n')
+  if (!turns) return ''
+  const recent = turns.length > discussionLimit ? `…${turns.slice(-discussionLimit)}` : turns
+  return `This side chat was refreshed with the main conversation's latest context. Earlier in this side chat:\n\n${recent}`
+}
 
 export class Conversation {
   readonly state: ChatState = {
@@ -42,6 +56,7 @@ export class Conversation {
   private approvals = new Map<string, (result: PermissionResult) => void>()
   private needsSideInstruction = true
   private editingChanged = false
+  private earlier = ''
   private closed = false
   private ended = false
   private stopping = false
@@ -55,6 +70,17 @@ export class Conversation {
     this.state.cwd = options.cwd
     this.state.effort = options.effort ?? 'auto'
     this.state.canEdit = options.canEdit ?? false
+    if (options.carried?.length) {
+      this.earlier = earlierDiscussion(options.carried)
+      this.state.messages = [
+        ...options.carried,
+        {
+          id: crypto.randomUUID(),
+          role: 'notice',
+          text: "Refreshed with the main chat's latest context",
+        },
+      ]
+    }
     const env: Record<string, string | undefined> = {
       ...process.env,
       CC_SIDE_WORKER: '1',
@@ -282,7 +308,7 @@ export class Conversation {
   }
 
   private local(text: string) {
-    this.state.messages.push({ id: crypto.randomUUID(), role: 'assistant', text })
+    this.state.messages.push({ id: crypto.randomUUID(), role: 'assistant', text, local: true })
     this.state.notice = undefined
     this.changed()
   }
@@ -304,6 +330,7 @@ export class Conversation {
     if (!command) {
       this.needsSideInstruction = false
       this.editingChanged = false
+      this.earlier = ''
     }
     this.state.status = 'working'
     this.state.activity = { phase: 'requesting', startedAt: Date.now() }
@@ -322,7 +349,8 @@ export class Conversation {
   // What Claude needs with the next message: the side's purpose, then any change to edits.
   private preface() {
     const editing = this.state.canEdit ? editingOn : editingOff
-    if (this.needsSideInstruction) return `${sidePurpose} ${editing}`
+    if (this.needsSideInstruction)
+      return [`${sidePurpose} ${editing}`, this.earlier].filter(Boolean).join('\n\n')
     if (this.editingChanged)
       return `The user turned file edits ${this.state.canEdit ? 'on' : 'off'}. ${editing}`
     return ''
@@ -500,6 +528,7 @@ export class Conversation {
       this.state.notice = undefined
       this.state.activity = null
       this.needsSideInstruction = true
+      this.earlier = ''
     } else if (message.type === 'system' && message.subtype === 'status') {
       if (message.status === 'compacting') this.activity('compacting')
       if (message.status === 'requesting') this.activity('requesting')

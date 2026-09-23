@@ -15,6 +15,11 @@ export const localCommands: SideCommand[] = [
     description: 'Allow or block file edits, here and in new side chats',
     argumentHint: '[on|off]',
   },
+  {
+    name: 'refresh',
+    description: 'Catch up with the main chat, keeping this discussion',
+    argumentHint: '',
+  },
   { name: 'insert', description: 'Put the last reply in the main prompt', argumentHint: '' },
   { name: 'copy', description: 'Copy the last reply', argumentHint: '' },
   { name: 'stop', description: 'Stop the current reply', argumentHint: '' },

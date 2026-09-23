@@ -6,8 +6,10 @@ export type SecuritySettings = Pick<Settings, 'permissions' | 'sandbox'>
 
 export type ChatMessage = {
   id: string
-  role: 'user' | 'assistant' | 'tool'
+  role: 'user' | 'assistant' | 'tool' | 'notice'
   text: string
+  // Output of a side command such as /help, which Claude did not write.
+  local?: boolean
   toolName?: string
   toolInput?: string
   outputTruncated?: boolean
@@ -80,6 +82,8 @@ export type StartOptions = {
   model: string
   effort?: EffortLevel
   canEdit?: boolean
+  // The side's messages before a refresh, shown again and summarized for Claude.
+  carried?: ChatMessage[]
   ownerPid?: number
   settingSources?: ('user' | 'project' | 'local')[]
   securitySettings?: SecuritySettings

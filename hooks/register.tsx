@@ -66,11 +66,14 @@ export const register: Register = (on) => {
   let focusedPermission: string | undefined
   let mainEffort: EffortLevel | undefined
   let savedEditing = false
+  // Main replies that finished since the side forked, and a refresh in flight.
+  let mainAhead = 0
+  let refreshing = false
   const composerProps = (): ComposerProps => ({
     epoch: generation,
     seed: draft,
     receipt,
-    busy: sending || state.status === 'working' || state.status === 'permission',
+    busy: sending || refreshing || state.status === 'working' || state.status === 'permission',
     activity: state.status === 'working' ? (state.activity ?? null) : null,
     columns: composerColumns,
     maxRows: Math.max(2, Math.min(8, Math.floor(composerRows / 4))),
@@ -186,12 +189,17 @@ export const register: Register = (on) => {
     if (
       !text.trim() ||
       sending ||
+      refreshing ||
       !endpoint ||
       state.status === 'working' ||
       state.status === 'permission'
     )
       return false
     if (text.trim() === '/insert' || text.trim() === '/copy') return shareReply(text.trim())
+    if (text.trim() === '/refresh') {
+      void refresh()
+      return true
+    }
     sending = true
     localError = ''
     localNotice = ''
@@ -224,6 +232,7 @@ export const register: Register = (on) => {
   const connect = async () => {
     if (!opened || connecting) return
     connecting = true
+    mainAhead = 0
     state = empty()
     localError = ''
     follow = true
@@ -255,12 +264,59 @@ export const register: Register = (on) => {
       if (epoch === connection) connecting = false
     }
   }
+  // Re-fork at main's latest point, keeping this discussion, the composer, and the side's
+  // choices. The old helper serves until the new one is up, so a failure changes nothing.
+  const refresh = async () => {
+    const old = endpoint
+    if (!old || refreshing) return false
+    if (sending || state.status === 'working' || state.status === 'permission') {
+      notify('Wait for the current reply, or stop it first.')
+      return false
+    }
+    const chat = generation
+    const counted = mainAhead
+    refreshing = true
+    localError = ''
+    host.invalidate()
+    try {
+      const started = await host.start(
+        await host.options({
+          ...(state.model ? { model: state.model } : {}),
+          effort: effortLevels.find((level) => level === state.effort),
+          canEdit: state.canEdit,
+          carried: state.messages,
+        }),
+      )
+      if (chat !== generation || !opened) {
+        await host.request(started, '/close')
+        return false
+      }
+      endpoint = started
+      mainAhead -= counted
+      state = { ...state, revision: -1 }
+      const epoch = ++connection
+      trace('side.refreshed', { pid: started.pid })
+      void poll(epoch)
+      void host.request(old, '/close').catch(() => {})
+      return true
+    } catch (error) {
+      if (chat === generation) localError = error instanceof Error ? error.message : String(error)
+      return false
+    } finally {
+      if (chat === generation) {
+        refreshing = false
+        host.invalidate()
+      }
+    }
+  }
   const close = async () => {
     if (!opened && !endpoint && !connecting) return
     const old = endpoint
     generation++
     connection++
     opened = false
+    mainAhead = 0
+    refreshing = false
     endpoint = undefined
     state = empty()
     draft = ''
@@ -423,6 +479,12 @@ export const register: Register = (on) => {
         })
     }
     const busy = sending || state.status === 'working' || state.status === 'permission'
+    const notice =
+      state.status === 'starting'
+        ? 'Connecting…'
+        : refreshing
+          ? 'Refreshing…'
+          : localNotice || state.notice
     const columns = e.props.bodyColumns - 2
     composerColumns = columns
     composerRows = e.props.scroll.bodyRows
@@ -507,12 +569,32 @@ export const register: Register = (on) => {
           ) : null}
         </Box>
         <Box marginTop={1} flexDirection="column" width={columns}>
-          <Box>
-            {state.status === 'starting' || localNotice || state.notice ? (
-              <Text dimColor>
-                {state.status === 'starting' ? 'Connecting…' : localNotice || state.notice}
-              </Text>
-            ) : null}
+          {/* Like main's own hints: one quiet line, the notice left and staleness right. */}
+          <Box justifyContent="space-between">
+            <Box flexShrink={1}>
+              {notice ? (
+                <Text dimColor wrap="truncate-end">
+                  {notice}
+                </Text>
+              ) : null}
+            </Box>
+            <Box>
+              {mainAhead > 0 && !refreshing ? (
+                <Box gap={1}>
+                  <Text dimColor>
+                    {`main is ${mainAhead} ${mainAhead === 1 ? 'reply' : 'replies'} ahead ·`}
+                  </Text>
+                  <Button
+                    key="refresh-side"
+                    plain
+                    label="/refresh"
+                    onPress={async () => {
+                      await refresh()
+                    }}
+                  />
+                </Box>
+              ) : null}
+            </Box>
           </Box>
           <Box>
             {state.status === 'error' && !endpoint ? (
@@ -601,6 +683,14 @@ export const register: Register = (on) => {
     // pane redraw to release the pending send after an error or remount.
     return { props: composerProps() }
   })
+  on('turn.complete', async ($, e, next) => {
+    // Main-loop replies the open side chat has not seen.
+    if (!e.agentId && endpoint) {
+      mainAhead++
+      host.invalidate()
+    }
+    return next(e)
+  })
   on('classic.Stop', async ($, e, next) => {
     // A new side chat starts at the effort of the main thread's last turn.
     if (!e.agent_id) mainEffort = effortLevels.find((level) => level === e.effort?.level)
@@ -630,7 +720,9 @@ type BridgeClient = ReturnType<typeof createBridgeClient>
 
 function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
-    async options(choices: Pick<StartOptions, 'effort' | 'canEdit'>): Promise<StartOptions> {
+    async options(
+      choices: Partial<Pick<StartOptions, 'model' | 'effort' | 'canEdit' | 'carried'>>,
+    ): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
       const { permissions, sandbox } = await $.settings.read()
       return {

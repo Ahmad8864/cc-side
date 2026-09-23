@@ -37,6 +37,9 @@ Mods APIs can change between releases.
 - Tools request approval in the pane, with edits shown as diffs and commands as
   code. Stop interrupts the current reply.
 - `/insert` puts the last reply in the main prompt at the cursor; `/copy` copies it.
+- When main moves on, `main is 2 replies ahead · /refresh` appears above the
+  composer. `/refresh` re-forks the side at main's latest point and keeps your
+  side discussion on screen; Claude gets it as text with your next message.
 - Tool rows show compact arguments and output. Click a row to expand its details.
 - Escape returns to main. ×, `/close`, or `/side close` discards the side chat and draft.
 - A rejected `/side` question returns to the main prompt for retry. It is not queued.
@@ -49,12 +52,14 @@ its automatic sizing.
 - **Paste is not supported reliably.** Claude can route pasted text to the main
   prompt even after clicking the side editor. The current Mods API lacks paste
   and focus-loss events. Initial keyboard focus also requires a click.
-- Context is a saved snapshot from when the pane opens. Later main messages are
-  not synchronized. An empty main chat starts a fresh side conversation.
-- A side chat reuses the main chat's prompt cache while its model and effort
-  match main's: a measured fork on Sonnet read 51,774 cached tokens and wrote 336.
-  Switching the side's model or effort writes its context once more. Opening a
-  pane alone makes no model request. `/side stats` shows per-request cache usage.
+- Context is a snapshot from when the pane opened or was last refreshed. A refresh
+  carries the side's questions and answers as text, not its tool results. An
+  empty main chat starts a fresh side conversation.
+- A side chat reuses the main chat's prompt cache when it opens and on `/refresh`,
+  while its model and effort match main's: a measured fork on Sonnet read 51,774
+  cached tokens and wrote 336. With another model or effort, the side writes its
+  context once more. Opening a pane alone makes no model request. `/side stats`
+  shows per-request cache usage.
 - The chats share a working directory: file changes survive closing the side.
   The child transcript is not resumable, but tool files and configured logging
   can persist.

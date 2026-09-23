@@ -571,6 +571,58 @@ test('/insert and /copy share the last reply without buttons under every reply',
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
 })
 
+test('main replies since the fork show a quiet hint, and /refresh re-forks in place', async () => {
+  const messages: ChatState['messages'] = [
+    { id: 'q', role: 'user', text: 'Why?' },
+    { id: 'a', role: 'assistant', text: 'Because.' },
+  ]
+  const h = await harness('ready', [], undefined, messages, {
+    model: 'claude-sonnet-5',
+    effort: 'low',
+  })
+  await h.command()
+  await h.invoke('turn.complete', { agentId: 'worker' })
+  expect(JSON.stringify(await h.render())).not.toContain('ahead')
+  await h.invoke('turn.complete', {})
+  await h.invoke('turn.complete', {})
+  expect(JSON.stringify(await h.render())).toContain('main is 2 replies ahead')
+  const before = await h.editor()
+  await (await h.render()).find((n) => n.props.key === 'refresh-side')!.props.onPress()
+  expect(h.launchOptions[1]).toMatchObject({
+    model: 'claude-sonnet-5',
+    effort: 'low',
+    canEdit: false,
+    carried: messages,
+  })
+  expect(h.requests.filter((r) => r.path === '/close').map((r) => r.url)).toEqual([
+    'http://test/1/close',
+  ])
+  expect((await h.editor()).props.key).toBe(before.props.key)
+  expect(JSON.stringify(await h.render())).not.toContain('ahead')
+})
+
+test('the refresh hint waits for the current reply instead of dropping it', async () => {
+  const h = await harness('working')
+  await h.command()
+  await h.invoke('turn.complete', {})
+  await (await h.render()).find((n) => n.props.key === 'refresh-side')!.props.onPress()
+  expect(h.starts()).toBe(1)
+  expect(JSON.stringify(await h.render())).toContain('Wait for the current reply')
+})
+
+test('a failed refresh keeps the current side chat and its hint', async () => {
+  const h = await harness()
+  await h.command()
+  await h.invoke('turn.complete', {})
+  h.failStart(JSON.stringify({ error: 'The main conversation is not saved yet.' }))
+  expect((await h.submit('first', 1, '/refresh')).props.receipt.accepted).toBe(true)
+  await Bun.sleep(0)
+  const tree = JSON.stringify(await h.render())
+  expect(tree).toContain('not saved yet')
+  expect(tree).toContain('main is 1 reply ahead')
+  expect(h.requests.some((r) => r.path === '/close')).toBe(false)
+})
+
 test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {
   const h = await harness()
   h.failStart(JSON.stringify({ error: 'Claude Code was not found.' }))
