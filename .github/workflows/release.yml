@@ -58,7 +58,7 @@ jobs:
           - { runner: ubuntu-latest, helper: cc-side-linux-x64 }
           - { runner: ubuntu-24.04-arm, helper: cc-side-linux-arm64 }
           - { runner: windows-latest, helper: cc-side-windows-x64.exe }
-          - { runner: windows-11-arm, helper: cc-side-windows-x64.exe }
+          - { runner: windows-11-arm, helper: cc-side-windows-arm64.exe }
     runs-on: ${{ matrix.runner }}
     defaults:
       run:

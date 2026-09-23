@@ -685,6 +685,9 @@ test('each computer launches its packaged helper; Bun is an explicit development
   expect(await launches({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'AMD64' } })).toEqual([
     ['/plugin/helpers/cc-side-windows-x64.exe'],
   ])
+  expect(await launches({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'ARM64' } })).toEqual([
+    ['/plugin/helpers/cc-side-windows-arm64.exe'],
+  ])
   expect(await launches({ env: { CC_SIDE_BUN: '/dev/bun' } })).toEqual([
     ['/dev/bun', '/plugin/bridge/main.ts'],
   ])

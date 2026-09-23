@@ -11,6 +11,7 @@ export const helperTargets: Target[] = [
   { os: 'linux', arch: 'x64' },
   { os: 'linux', arch: 'arm64' },
   { os: 'windows', arch: 'x64' },
+  { os: 'windows', arch: 'arm64' },
 ]
 
 // Baseline x64 builds also run on CPUs without AVX2, such as older machines and some VMs.
@@ -30,11 +31,6 @@ export function targetOf(system = '', machine = ''): Target {
   return { os: systems[os] ?? os, arch: architectures[arch] ?? arch }
 }
 
-/** The helper a computer runs: its own, or on arm64 Windows, which emulates x64, the x64 one. */
-export function helperFor(target: Target) {
-  const emulated =
-    target.os === 'windows' && target.arch === 'arm64' ? [{ ...target, arch: 'x64' }] : []
-  return [target, ...emulated].find((candidate) =>
-    helperTargets.some(({ os, arch }) => os === candidate.os && arch === candidate.arch),
-  )
-}
+/** The helper built for a computer, when releases ship one. */
+export const helperFor = (target: Target) =>
+  helperTargets.find(({ os, arch }) => os === target.os && arch === target.arch)
