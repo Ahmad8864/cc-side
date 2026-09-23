@@ -39,6 +39,7 @@ async function harness(
   const scrolls: unknown[] = []
   const focuses: unknown[] = []
   let prompt = ''
+  let startup: string | undefined
   let state: ChatState
   let settings: Record<string, unknown> = {}
   const $ = {
@@ -56,6 +57,7 @@ async function harness(
         launches.push(command)
         launchOptions.push(JSON.parse(options.stdin))
         starts++
+        if (startup !== undefined) return { exitCode: 1, stdout: startup }
         state = {
           revision: 1,
           status: initialStatus,
@@ -173,6 +175,9 @@ async function harness(
     hidden: () => hidden,
     failNext: () => {
       failSend = true
+    },
+    failStart: (stdout: string) => {
+      startup = stdout
     },
   }
 }
@@ -437,6 +442,17 @@ test('tool details expand and collapse without replacing the composer or losing 
   expect(after.props.key).toBe(editor.props.key)
   expect(after.props.props.seed).toBe('Keep this draft')
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
+})
+
+test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {
+  const h = await harness()
+  h.failStart(JSON.stringify({ error: 'Claude Code was not found.' }))
+  await h.command()
+  const tree = await h.render()
+  expect(JSON.stringify(tree)).toContain('Claude Code was not found.')
+  h.failStart('Segmentation fault')
+  await tree.find((n) => n.props.key === 'retry-side')!.props.onPress()
+  expect(JSON.stringify(await h.render())).toContain('Reinstall cc-side')
 })
 
 test('installed plugins launch the packaged helper; Bun is an explicit development override', async () => {

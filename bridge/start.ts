@@ -13,13 +13,16 @@ export async function startHelper(serverArguments: string[]) {
   let errors = ''
   const timeout = setTimeout(() => {
     child.kill()
-    process.stderr.write('Side chat helper did not start\n')
+    process.stdout.write(
+      JSON.stringify({ error: 'The side chat helper did not start within 10 seconds.' }) + '\n',
+    )
     process.exit(1)
   }, 10000)
   child.stderr.on('data', (chunk) => {
     errors = (errors + chunk).slice(-3000)
   })
-  child.on('exit', (code) => {
+  // Unlike exit, close waits for a startup error the child may still be writing.
+  child.on('close', (code) => {
     process.stderr.write(errors || `Side chat helper exited (${code})\n`)
     process.exit(1)
   })

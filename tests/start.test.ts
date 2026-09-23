@@ -64,3 +64,16 @@ test.skipIf(process.platform !== 'darwin')(
     }
   },
 )
+
+test.skipIf(process.platform !== 'darwin')(
+  'launcher failures are startup errors the pane can show',
+  async () => {
+    const child = Bun.spawn([fileURLToPath(new URL('../bin/cc-side', import.meta.url).href)], {
+      env: { ...process.env, CC_SIDE_CLAUDE: '/missing/claude' },
+      stdout: 'pipe',
+    })
+    expect(JSON.parse(await new Response(child.stdout).text())).toEqual({
+      error: 'Claude Code was not found. Install it before using cc-side.',
+    })
+  },
+)

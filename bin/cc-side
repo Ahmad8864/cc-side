@@ -1,11 +1,17 @@
 #!/bin/sh
 set -eu
 
+# Startup errors are protocol data the side pane shows as written.
+fail() {
+  printf '{"error":"%s"}\n' "$1"
+  exit 1
+}
+
 plugin_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) helper="$plugin_bin/cc-side-darwin-arm64" ;;
   Darwin-x86_64) helper="$plugin_bin/cc-side-darwin-x64" ;;
-  *) echo 'cc-side currently supports macOS only.' >&2; exit 1 ;;
+  *) fail 'cc-side currently supports macOS only.' ;;
 esac
 
 if [ -z "${CC_SIDE_CLAUDE:-}" ]; then
@@ -28,8 +34,7 @@ if [ -z "${CC_SIDE_CLAUDE:-}" ]; then
   CC_SIDE_CLAUDE=${CC_SIDE_CLAUDE:-$(command -v claude || true)}
 fi
 if [ ! -x "$CC_SIDE_CLAUDE" ]; then
-  echo 'Claude Code was not found. Install it before using cc-side.' >&2
-  exit 1
+  fail 'Claude Code was not found. Install it before using cc-side.'
 fi
 export CC_SIDE_CLAUDE
 exec "$helper" "$@"

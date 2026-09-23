@@ -543,12 +543,14 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
         stdin: JSON.stringify(options),
         timeoutMs: 15000,
       })
-      if (result.exitCode) {
+      let startup: StartupResult
+      try {
+        startup = JSON.parse(result.stdout)
+      } catch {
         throw new Error(
           'Could not start the side helper. Reinstall cc-side, or check the development setup if running from source.',
         )
       }
-      const startup: StartupResult = JSON.parse(result.stdout)
       if ('error' in startup) throw new Error(startup.error)
       return startup
     },
