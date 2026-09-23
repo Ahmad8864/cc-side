@@ -35,7 +35,9 @@ def serve(directory):
     env = {**os.environ, 'CLAUDE_CODE_ENABLE_FUNCTION_HOOKS': '1',
            'CLAUDE_CODE_NO_FLICKER': '1', 'CC_SIDE_TRACE': str(directory / 'trace.json'),
            'CC_SIDE_TEST': '1', 'TERM': 'xterm-256color', 'FORCE_COLOR': '1'}
-    env.pop('CLAUDECODE', None)
+    # Start a session of its own, even when run from inside another Claude session.
+    for name in json.loads((ROOT / 'shared/session-env.json').read_text()):
+        env.pop(name, None)
     env.pop('NO_COLOR', None)
     if PLUGIN == ROOT:
         env['CC_SIDE_BUN'] = shutil.which('bun') or 'bun'
