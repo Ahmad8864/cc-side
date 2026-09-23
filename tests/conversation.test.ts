@@ -228,6 +228,15 @@ test('permission metadata crosses the bridge without persisting an allow rule', 
   h.chat.close()
 })
 
+test('a Claude startup error is published as soon as it is written', () => {
+  const h = harness()
+  const revision = h.chat.state.revision
+  h.options.stderr!('Error: MCP server failed to start')
+  expect(h.chat.state.error).toContain('MCP server failed to start')
+  expect(h.chat.state.revision).toBeGreaterThan(revision)
+  h.chat.close()
+})
+
 test('inherited sandbox restrictions fail closed when sandboxing is unavailable', () => {
   const securitySettings = {
     permissions: { deny: ['Read(.env)'], ask: ['Bash(*)'] },

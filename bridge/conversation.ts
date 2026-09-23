@@ -78,8 +78,10 @@ export class Conversation {
         canUseTool: (tool, input, context) => this.requestPermission(tool, input, context),
         stderr: (text) => {
           // Do not log credentials, prompts, or model output to disk.
-          if (text.includes('Error') && this.state.status === 'starting')
+          if (text.includes('Error') && this.state.status === 'starting') {
             this.state.error = text.slice(-1000)
+            this.changed()
+          }
         },
       },
     })
