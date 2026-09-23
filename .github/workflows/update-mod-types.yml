@@ -46,7 +46,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         if: steps.version.outputs.update == 'true'
         with:
-          bun-version: 1.2.23
+          bun-version: 1.4.2
       - name: Check the updated types and plugin
         if: steps.version.outputs.update == 'true'
         run: |
