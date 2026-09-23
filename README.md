@@ -51,8 +51,9 @@ its automatic sizing.
   and focus-loss events. Initial keyboard focus also requires a click.
 - Context is a saved snapshot from when the pane opens. Later main messages are
   not synchronized. An empty main chat starts a fresh side conversation.
-- The first side request can miss the parent's prompt cache. A measured SDK fork
-  read 0 cached tokens and wrote 19,952; its next follow-up read 20,143. Opening a
+- A side chat reuses the main chat's prompt cache while its model and effort
+  match main's: a measured fork on Sonnet read 51,774 cached tokens and wrote 336.
+  Switching the side's model or effort writes its context once more. Opening a
   pane alone makes no model request. `/side stats` shows per-request cache usage.
 - The chats share a working directory: file changes survive closing the side.
   The child transcript is not resumable, but tool files and configured logging
