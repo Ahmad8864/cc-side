@@ -191,6 +191,9 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     0,
     Math.min(instance.menu.length - menuSize, state.selected - menuSize + 1),
   )
+  const visible = instance.menu.slice(menuStart, menuStart + menuSize)
+  // Line descriptions up in a column; a longer label only shifts its own row.
+  const labelColumn = Math.min(24, Math.max(0, ...visible.map((item) => item.label.length)))
   const animation = props.activity ? activityFrame(props.activity, Date.now()) : null
   const inputTop = animation ? 2 : 1
   const menuTop = inputTop + count + 1
@@ -248,7 +251,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
         )
       })}
       <Text dimColor>{rule}</Text>
-      {instance.menu.slice(menuStart, menuStart + menuSize).map((item, index) => (
+      {visible.map((item, index) => (
         <Box key={item.value} height={1}>
           <Text
             color={menuStart + index === state.selected ? 'claude' : undefined}
@@ -256,7 +259,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
             wrap="truncate-end"
           >
             {menuStart + index === state.selected ? '› ' : '  '}
-            {item.label} <Text dimColor>{item.description}</Text>
+            {item.label.padEnd(labelColumn)} <Text dimColor>{item.description}</Text>
           </Text>
         </Box>
       ))}

@@ -77,6 +77,11 @@ function flatten(node: unknown): Tree[] {
   const tree = node as Tree
   return [tree, ...tree.children.flatMap(flatten)]
 }
+function menuRows(node: unknown) {
+  return flatten(node)
+    .filter((n) => n.children.includes('› ') || n.children.includes('  '))
+    .map((n) => n.children.filter((c) => typeof c === 'string').join(''))
+}
 
 test('cursor stays visible after Client focus transfer and Shift+Enter grows the draft', () => {
   const h = harness()
@@ -164,4 +169,25 @@ test('Enter runs an exact slash command with optional arguments, while /model op
   models.key({ key: 'return' })
   expect(models.posts.at(-1).text).toBe('/model ')
   expect(models.posts.at(-1).submit).toBeUndefined()
+})
+
+test('the /effort menu marks the current level and lines up its descriptions', () => {
+  expect(menuRows(harness('/effort ').render())).toEqual([
+    '› low    ',
+    '  medium ',
+    '  high ✓ ',
+    '  xhigh  ',
+    '  max    ',
+    '  auto   ',
+  ])
+})
+
+test('a label too long for the description column shifts only its own row', () => {
+  const h = harness('/')
+  const long = 'a-very-long-project-skill-name'
+  h.props.commands = [
+    { name: 'help', description: 'Help', argumentHint: '' },
+    { name: long, description: 'Skill', argumentHint: '' },
+  ]
+  expect(menuRows(h.render())).toEqual([`› ${'/help'.padEnd(24)} `, `  /${long} `])
 })
