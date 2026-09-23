@@ -124,7 +124,10 @@ async function harness(
       },
       resolve: async () =>
         Object.fromEntries(
-          ['Box', 'Text', 'Markdown', 'Input', 'Button', 'Client'].map((name) => [name, name]),
+          ['Box', 'Text', 'Markdown', 'Code', 'Input', 'Button', 'Client'].map((name) => [
+            name,
+            name,
+          ]),
         ),
     },
     clock: { after: (_ms: number, fn: () => void) => timers.push(fn) },
@@ -500,13 +503,13 @@ test('long messages, approvals, and histories stay within the pane drawing limit
   await h.command()
   const tree = await h.tree()
   const strings = nodes(tree).flatMap((n) =>
-    [...n.children, n.props.text].filter((c) => typeof c === 'string'),
+    [...n.children, n.props.text, n.props.source].filter((c) => typeof c === 'string'),
   )
   expect(JSON.stringify(tree).length).toBeLessThan(100000)
   expect(Math.max(...strings.map((s) => s.length))).toBeLessThanOrEqual(10000)
   expect(JSON.stringify(tree)).toContain('Latest answer')
   expect(JSON.stringify(tree)).toContain('earlier messages hidden')
-  expect(JSON.stringify(tree)).toContain('more characters')
+  expect(nodes(tree).find((n) => n.tag === 'Code')!.props.source.length).toBeLessThanOrEqual(6000)
   expect(nodes(tree).some((n) => n.tag === 'Client')).toBe(true)
 })
 

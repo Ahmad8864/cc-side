@@ -425,15 +425,21 @@ export const register: Register = (on) => {
       state.model && state.effort && supportedEfforts(state.model, state.models).length
         ? ` (${state.effort})`
         : ''
-    const permissions = renderPermissions(elements, state.permissions, answers, {
-      invalidate: host.invalidate,
-      setError: (message) => {
-        localError = message
-        host.invalidate()
+    const permissions = renderPermissions(
+      elements,
+      state.permissions,
+      answers,
+      {
+        invalidate: host.invalidate,
+        setError: (message) => {
+          localError = message
+          host.invalidate()
+        },
+        decide: (id, allow, answers) =>
+          action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
       },
-      decide: (id, allow, answers) =>
-        action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
-    })
+      state.cwd,
+    )
     const composer = (
       <Client
         key={`side-composer-${generation}`}

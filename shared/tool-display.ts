@@ -51,7 +51,7 @@ function inputSummary(input: unknown, cwd?: string): string {
   return entries.map(([key, value]) => `${key}: ${compactValue(value, cwd)}`).join(' · ')
 }
 
-function inputDetails(input: unknown): string {
+export function inputDetails(input: unknown): string {
   const display = (value: unknown) =>
     typeof value === 'string' ? value : JSON.stringify(value, null, 2)
   if (input === undefined) return 'Arguments not available yet.'

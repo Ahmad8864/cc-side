@@ -12,6 +12,7 @@ import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../s
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, modelLabel, parseCommand, supportedEfforts } from '../shared/commands.ts'
 import { toolOutput } from './tool-output.ts'
+import { editStarts } from './edit-starts.ts'
 import sessionEnv from '../shared/session-env.json'
 
 // Claude's own file-changing tools, which a read-only side chat refuses.
@@ -136,6 +137,7 @@ export class Conversation {
         blockedPath,
         mcpServer,
         defaultToNo,
+        editStarts: editStarts(input),
       })
       this.state.status = 'permission'
       this.changed()

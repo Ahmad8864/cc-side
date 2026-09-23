@@ -2,6 +2,7 @@ import type { Elements, RenderElement } from 'claude-code'
 import type { ChatMessage, Permission } from '../shared/protocol.ts'
 import { cleanInput, layout } from '../shared/editor.ts'
 import { clip, splitText, treeLimit } from '../shared/limits.ts'
+import { approvalParts } from '../shared/approval.ts'
 import { questionsFor } from '../shared/questions.ts'
 import { toolDisplay } from '../shared/tool-display.ts'
 
@@ -128,6 +129,34 @@ export function renderMessages(
   ]
 }
 
+function approvalView(elements: Elements['terminal'], permission: Permission, cwd?: string) {
+  const { Text, Code } = elements
+  return approvalParts(permission, cwd).map((part, index) => {
+    const key = `${permission.id}-part-${index}`
+    if (part.kind === 'file')
+      return (
+        <Text key={key} bold>
+          {part.path}
+        </Text>
+      )
+    if (part.kind === 'code')
+      return (
+        <Code
+          key={key}
+          source={part.source}
+          format={part.format}
+          path={part.path}
+          language={part.language}
+        />
+      )
+    return (
+      <Text key={key} dimColor wrap="wrap">
+        {part.text}
+      </Text>
+    )
+  })
+}
+
 export function renderPermissions(
   elements: Elements['terminal'],
   permissions: Permission[],
@@ -137,6 +166,7 @@ export function renderPermissions(
     setError: (message: string) => void
     decide: (id: string, allow: boolean, answers?: Record<string, string>) => Promise<boolean>
   },
+  cwd?: string,
 ) {
   const { Box, Text, Button, Input } = elements
   return (
@@ -206,7 +236,7 @@ export function renderPermissions(
                 </Box>
               ))
             ) : (
-              <Text>{clip(JSON.stringify(permission.input, null, 2), 6000)}</Text>
+              <Box flexDirection="column">{approvalView(elements, permission, cwd)}</Box>
             )}
             <Box gap={2}>
               <Button

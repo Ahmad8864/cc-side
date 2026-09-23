@@ -30,6 +30,7 @@ export type Permission = {
   blockedPath?: string
   mcpServer?: { name: string; source: string }
   defaultToNo?: boolean
+  editStarts?: number[]
 }
 export type SideCommand = {
   name: string
