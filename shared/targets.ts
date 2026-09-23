@@ -1,7 +1,10 @@
 /** A Bun compile target: the operating system and architecture a standalone helper runs on. */
 export type Target = { os: string; arch: string; baseline?: boolean }
 
-/** The targets each release ships a standalone helper for; baseline builds run without AVX2. */
+/**
+ * The targets each release ships a standalone helper for, each verified on its own runner by
+ * the Release workflow. Baseline builds run without AVX2.
+ */
 export const helperTargets: Target[] = [
   { os: 'darwin', arch: 'arm64' },
   { os: 'darwin', arch: 'x64' },

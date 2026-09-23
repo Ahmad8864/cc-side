@@ -3,12 +3,14 @@ name: Release
 on:
   push:
     tags: ['cc-side--v*']
+  # A manual run builds and verifies every helper without publishing.
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,8 +20,58 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build
-      - name: Check standalone helper
-        run: dist/plugin/helpers/cc-side-darwin-$(uname -m | sed s/x86_64/x64/) --version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            dist/cc-side-*.zip
+            dist/marketplace.json
+            dist/SHA256SUMS
+
+  # Each helper runs from the release archive on the system it was built for.
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, helper: cc-side-darwin-arm64 }
+          - { runner: macos-15-intel, helper: cc-side-darwin-x64 }
+          - { runner: ubuntu-latest, helper: cc-side-linux-x64 }
+          - { runner: ubuntu-24.04-arm, helper: cc-side-linux-arm64 }
+          - { runner: windows-latest, helper: cc-side-windows-x64.exe }
+          - { runner: windows-11-arm, helper: cc-side-windows-x64.exe }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CC_SIDE_HELPER: ${{ github.workspace }}/plugin/helpers/${{ matrix.helper }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
+      - run: unzip -q dist/cc-side-*.zip -d plugin
+      - run: '"$CC_SIDE_HELPER" --version'
+      - run: bun test tests/lifecycle.test.ts
+
+  publish:
+    needs: verify
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
