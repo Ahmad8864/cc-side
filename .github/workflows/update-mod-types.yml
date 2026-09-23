@@ -1,0 +1,72 @@
+name: Update Claude Mods types
+
+on:
+  schedule:
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-mod-types
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check published Claude Code version
+        id: version
+        run: |
+          latest=$(npm view @anthropic-ai/claude-code version)
+          [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          current=$(sed -n '1s@^// Written by Claude Code \([0-9.]*\)\.$@\1@p' types/claude-code.d.ts)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$latest" != "$current" ]; then
+            echo 'update=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Claude Code
+        if: steps.version.outputs.update == 'true'
+        env:
+          CLAUDE_VERSION: ${{ steps.version.outputs.latest }}
+        run: npm install --prefix "$RUNNER_TEMP/mod-cli" --no-save "@anthropic-ai/claude-code@$CLAUDE_VERSION"
+      - name: Generate declarations from the CLI
+        if: steps.version.outputs.update == 'true'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/mod-types-venv"
+          "$RUNNER_TEMP/mod-types-venv/bin/pip" install pexpect==4.9.0 pyte==0.8.2
+          "$RUNNER_TEMP/mod-types-venv/bin/python" scripts/update-mod-types.py \
+            --claude "$RUNNER_TEMP/mod-cli/node_modules/.bin/claude"
+      - uses: oven-sh/setup-bun@v2
+        if: steps.version.outputs.update == 'true'
+        with:
+          bun-version: 1.2.23
+      - name: Check the updated types and plugin
+        if: steps.version.outputs.update == 'true'
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 \
+            "$RUNNER_TEMP/mod-cli/node_modules/.bin/claude" plugin validate .claude-plugin/plugin.json
+      - name: Open or update the types PR
+        if: steps.version.outputs.update == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/update-mod-types
+          delete-branch: true
+          add-paths: |
+            types/claude-code.d.ts
+            types/UPSTREAM.md
+          commit-message: Update Claude Mods types to ${{ steps.version.outputs.latest }}
+          title: Update Claude Mods types to ${{ steps.version.outputs.latest }}
+          body: |
+            Generated with `/plugin-types` from Claude Code ${{ steps.version.outputs.latest }}.
+            The updater ran `bun run check` and `claude plugin validate` before opening this PR.
+            [Updater run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            Review the Mods API diff and validate terminal behavior before merging.
