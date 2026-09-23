@@ -45,3 +45,15 @@ test('/effort completion offers only the levels the selected model supports', ()
   expect(levels('claude-haiku-4-5-20251001')).toEqual(['auto'])
   expect(levels('claude-custom-model')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'auto'])
 })
+
+test('/effort completion names only the extremes and marks the current level', () => {
+  const menu = completions('/effort ', [], models, 'claude-opus-5-5', 'high')
+  expect(menu.map((c) => [c.label, c.description])).toEqual([
+    ['low', 'Fastest'],
+    ['medium', ''],
+    ['high ✓', ''],
+    ['xhigh', ''],
+    ['max', 'Most thorough'],
+    ['auto', 'Model default'],
+  ])
+})

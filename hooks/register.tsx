@@ -68,6 +68,7 @@ export const register: Register = (on) => {
     commands: state.commands ?? localCommands,
     models: state.models ?? [],
     model: state.model ?? '',
+    effort: state.effort ?? '',
   })
 
   const trace = (kind: string, data: unknown) => {

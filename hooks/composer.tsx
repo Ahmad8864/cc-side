@@ -15,6 +15,7 @@ export type ComposerProps = {
   commands: SideCommand[]
   models: SideModel[]
   model: string
+  effort: string
 }
 type State = Editor & {
   instance: string
@@ -29,6 +30,8 @@ type State = Editor & {
 }
 type IO = { state: State; props: ComposerProps; menu: Completion[]; send: () => void }
 const instances = new WeakMap<object, IO>()
+const menuFor = (text: string, props: ComposerProps) =>
+  completions(text, props.commands, props.models, props.model, props.effort)
 
 function snapshot(io: IO, surface: ClientSurface<State>) {
   // A complete snapshot survives Client.post coalescing. The unacknowledged
@@ -117,9 +120,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     }
     redraw()
   }
-  instance.menu = io.state.hiddenMenu
-    ? []
-    : completions(io.state.text, props.commands, props.models, props.model)
+  instance.menu = io.state.hiddenMenu ? [] : menuFor(io.state.text, props)
   const choose = (item: Completion, execute: boolean) => {
     setText(item.value)
     if (execute && item.execute) instance.send()
@@ -129,12 +130,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     const state = instance.state
     state.active = true
     if (state.pending) return
-    const menu = completions(
-      state.text,
-      instance.props.commands,
-      instance.props.models,
-      instance.props.model,
-    )
+    const menu = menuFor(state.text, instance.props)
     const shown = state.hiddenMenu ? [] : menu
     if (key.ctrl && key.key === 'g') {
       state.hiddenMenu = true

@@ -33,6 +33,7 @@ function harness(seed = '') {
     ],
     models: [],
     model: 'sonnet',
+    effort: 'high',
   }
   const surface = {
     get state() {

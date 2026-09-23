@@ -51,6 +51,12 @@ export function supportedEfforts(model: string, models: SideModel[] = []): strin
   return entry ? (entry.supportedEffortLevels ?? []) : effortLevels
 }
 
+function effortHint(level: string, levels: string[]) {
+  if (level === 'auto') return 'Model default'
+  if (level === levels[0]) return 'Fastest'
+  return level === levels.at(-1) ? 'Most thorough' : ''
+}
+
 // Names outrank descriptions, so Enter picks the model that was typed.
 function modelRank(model: SideModel, query: string) {
   const names = [model.value, model.displayName].map((name) => name.toLowerCase())
@@ -65,6 +71,7 @@ export function completions(
   commands: SideCommand[],
   models: SideModel[],
   model?: string,
+  effort?: string,
 ): Completion[] {
   if (!text.startsWith('/') || text.includes('\n')) return []
   const match = /^\/(model|effort)\s+(.*)$/i.exec(text)
@@ -80,12 +87,13 @@ export function completions(
           description: m.description,
           execute: true,
         }))
-    return [...supportedEfforts(model ?? '', models), 'auto']
+    const levels = supportedEfforts(model ?? '', models)
+    return [...levels, 'auto']
       .filter((level) => level.startsWith(query))
       .map((level) => ({
         value: `/effort ${level}`,
-        label: level,
-        description: level === 'auto' ? 'Use the model default' : 'This side chat only',
+        label: level === effort ? `${level} ✓` : level,
+        description: effortHint(level, levels),
         execute: true,
       }))
   }
