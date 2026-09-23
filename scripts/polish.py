@@ -95,7 +95,7 @@ def main():
     assert 'second line' in side()
     capture('multiline')
     count = closes()
-    click('Close')
+    click('✕')
     wait(lambda: closes() > count)
     wait(lambda: 'Side chat' not in call())
     open_side()
@@ -140,7 +140,8 @@ def main():
     wait(lambda: state().get('status') == 'ready', 30)
     assert 'FOLLOWUP_READY' in ''.join(m['text'] for m in state()['messages'] if m['role'] == 'assistant')
     count = closes()
-    click('Close')
+    type_text('/close')
+    key('\r')
     wait(lambda: closes() > count)
     open_side()
     assert not state().get('messages')
@@ -151,7 +152,7 @@ def main():
     wait(lambda: closes() > count)
     print(json.dumps({'physical_space': True, 'shift_enter': True, 'model_label_count': 1,
                       'send_error_recovery': True, 'first_send_and_followup': True,
-                      'close_discards_chat_and_draft': True, 'native_x_discards': True,
+                      'close_discards_chat_and_draft': True, 'slash_close_discards': True,
                       'activity_frames': sorted(frames)}, indent=2), flush=True)
 
 

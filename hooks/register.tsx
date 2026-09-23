@@ -453,14 +453,6 @@ export const register: Register = (on) => {
                 }}
               />
             ) : null}
-            <Button
-              key="close-side"
-              plain
-              label="Close"
-              onPress={async () => {
-                await host.closePane()
-              }}
-            />
           </Box>
         </Box>
       </Box>

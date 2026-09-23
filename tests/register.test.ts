@@ -211,7 +211,7 @@ test('side header displays selected effort for models that support it', async ()
   expect(await header('haiku', 'low')).toContain('Haiku 4.5')
 })
 
-test('Close button discards the conversation and draft before reopening a fresh helper', async () => {
+test('/close discards the conversation and draft before reopening a fresh helper', async () => {
   const h = await harness()
   await h.command()
   await h.submit('first', 7, 'Old question')
@@ -221,8 +221,7 @@ test('Close button discards the conversation and draft before reopening a fresh 
     element: before.props.key,
     data: { epoch: before.props.props.epoch, instance: 'first', seq: 8, text: 'Unsent draft' },
   })
-  const close = (await h.render()).find((n) => n.tag === 'Button' && n.props.label === 'Close')!
-  await close.props.onPress()
+  await h.submit('first', 9, '/close')
   expect(h.hidden()).toBe(true)
   expect(h.requests.filter((r) => r.path === '/close')).toHaveLength(1)
   await h.command()

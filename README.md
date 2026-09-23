@@ -33,7 +33,7 @@ Mods APIs can change between releases.
 - Type `/` for commands and project skills. `/model` and `/effort` affect only the side.
 - Tools request approval in the pane. Stop interrupts the current reply.
 - Tool rows show compact arguments and output. Click a row to expand its details.
-- Escape returns to main. Close, ×, or `/side close` discards the side chat and draft.
+- Escape returns to main. ×, `/close`, or `/side close` discards the side chat and draft.
 - A rejected `/side` question returns to the main prompt for retry. It is not queued.
 
 The pane resizes with the terminal. A manually saved Claude pane width overrides
