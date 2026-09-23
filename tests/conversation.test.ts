@@ -65,6 +65,7 @@ function harness(overrides: Partial<StartOptions> = {}) {
       resumeSessionAt: 'tip',
       cwd: '/project',
       model: 'same-as-parent',
+      claudePath: '/usr/local/bin/claude',
       ...overrides,
     },
     createQuery,
@@ -128,10 +129,10 @@ test('streams reconcile snapshots whose indexes exclude thinking; usage counts r
   chat.close()
 })
 
-test('fork uses Homebrew, same model, pinned context, persistence off, with separate follow-ups', async () => {
+test('fork uses the found Claude, same model, pinned context, persistence off, with separate follow-ups', async () => {
   const h = harness()
   expect(h.options).toMatchObject({
-    pathToClaudeCodeExecutable: '/opt/homebrew/bin/claude',
+    pathToClaudeCodeExecutable: '/usr/local/bin/claude',
     resume: 'parent',
     resumeSessionAt: 'tip',
     forkSession: true,
@@ -737,17 +738,4 @@ test('empty tool results render without crashing the conversation', () => {
   )
   expect(chat.state.messages).toMatchObject([{ role: 'tool', status: 'done', text: '' }])
   chat.close()
-})
-
-test('the side process uses the Homebrew binary selected by the launcher', () => {
-  const previous = process.env.CC_SIDE_CLAUDE
-  try {
-    process.env.CC_SIDE_CLAUDE = '/usr/local/bin/claude'
-    const h = harness()
-    expect(h.options.pathToClaudeCodeExecutable).toBe('/usr/local/bin/claude')
-    h.chat.close()
-  } finally {
-    if (previous === undefined) delete process.env.CC_SIDE_CLAUDE
-    else process.env.CC_SIDE_CLAUDE = previous
-  }
 })

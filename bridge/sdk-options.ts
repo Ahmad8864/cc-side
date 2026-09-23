@@ -16,7 +16,7 @@ export function sdkOptions(
   for (const name of [...sessionEnv, 'CC_SIDE_TRACE']) delete env[name]
   const configuredMode = options.securitySettings?.permissions?.defaultMode
   return {
-    pathToClaudeCodeExecutable: process.env.CC_SIDE_CLAUDE ?? '/opt/homebrew/bin/claude',
+    pathToClaudeCodeExecutable: options.claudePath,
     cwd: options.cwd,
     ...(options.resumeSessionAt
       ? {

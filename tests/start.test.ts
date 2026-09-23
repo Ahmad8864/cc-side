@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 test('the helper starts from a checkout path containing spaces', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'cc-side test '))
   try {
-    await copyFile(
-      fileURLToPath(new URL('../bridge/start.ts', import.meta.url).href),
-      join(directory, 'start.ts'),
-    )
+    for (const file of ['start.ts', 'platform.ts'])
+      await copyFile(
+        fileURLToPath(new URL(`../bridge/${file}`, import.meta.url).href),
+        join(directory, file),
+      )
     await writeFile(
       join(directory, 'server.ts'),
       `await Bun.stdin.text(); console.log(JSON.stringify({ error: 'Test helper reached' }));`,

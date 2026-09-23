@@ -1,9 +1,18 @@
 import { spawn } from 'node:child_process'
 import type { StartupResult, StartOptions } from '../shared/protocol.ts'
+import { findClaude } from './platform.ts'
+
+// Startup errors are protocol data the side pane shows as written.
+function fail(error: string): never {
+  process.stdout.write(JSON.stringify({ error }) + '\n')
+  process.exit(1)
+}
 
 export async function startHelper(serverArguments: string[]) {
   const options: StartOptions = JSON.parse(await Bun.stdin.text())
   options.ownerPid = process.ppid
+  options.claudePath = findClaude(process.ppid)
+  if (!options.claudePath) fail('Claude Code was not found. Install it before using cc-side.')
   const child = spawn(process.execPath, serverArguments, {
     detached: true,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -13,10 +22,7 @@ export async function startHelper(serverArguments: string[]) {
   let errors = ''
   const timeout = setTimeout(() => {
     child.kill()
-    process.stdout.write(
-      JSON.stringify({ error: 'The side chat helper did not start within 10 seconds.' }) + '\n',
-    )
-    process.exit(1)
+    fail('The side chat helper did not start within 10 seconds.')
   }, 10000)
   child.stderr.on('data', (chunk) => {
     errors = (errors + chunk).slice(-3000)

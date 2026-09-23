@@ -84,7 +84,9 @@ export type StartOptions = {
   canEdit?: boolean
   // The side's messages before a refresh, shown again and summarized for Claude.
   carried?: ChatMessage[]
+  // Set by the helper as it starts: the Claude that started it, and its executable.
   ownerPid?: number
+  claudePath?: string
   settingSources?: ('user' | 'project' | 'local')[]
   securitySettings?: SecuritySettings
   isolatedTest?: boolean
