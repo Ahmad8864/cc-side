@@ -16,6 +16,7 @@ bun run dev         # run the source plugin
 ## Code layout
 
 - `hooks/register.tsx`: pane lifecycle, host events, send acknowledgements, and bridge client.
+- `hooks/pane.tsx`: the pane's layout: header, transcript, notices, and the composer's place.
 - `hooks/transcript.tsx`: messages and permission controls.
 - `hooks/composer.tsx`: the drawing-thread editor and activity indicator.
 - `bridge/conversation.ts`: the Agent SDK session, commands, and streamed events.

@@ -8,10 +8,9 @@ import type {
   StartupResult,
   Submission,
 } from '../shared/protocol.ts'
-import { effortLevels, localCommands, modelLabel, supportedEfforts } from '../shared/commands.ts'
-import { treeLimit } from '../shared/limits.ts'
+import { effortLevels, localCommands } from '../shared/commands.ts'
 import type { ComposerProps } from './composer.tsx'
-import { renderMessages, renderPermissions } from './transcript.tsx'
+import { renderPane } from './pane.tsx'
 
 const PANE = 'side'
 const paneColumns = (columns: number) => Math.max(45, Math.floor(columns * 0.44))
@@ -468,7 +467,7 @@ export const register: Register = (on) => {
       }
     }
     const elements = await $.ui.resolve(e)
-    const { Box, Text, Button, Client } = elements
+    const { Client } = elements
     const cautious = state.permissions.find((permission) => permission.defaultToNo)?.id
     if (cautious !== focusedPermission) {
       focusedPermission = cautious
@@ -478,24 +477,33 @@ export const register: Register = (on) => {
             void host.focus(`deny-${cautious}`)
         })
     }
-    const busy = sending || state.status === 'working' || state.status === 'permission'
-    const notice =
-      state.status === 'starting'
-        ? 'Connecting…'
-        : refreshing
-          ? 'Refreshing…'
-          : localNotice || state.notice
     const columns = e.props.bodyColumns - 2
     composerColumns = columns
     composerRows = e.props.scroll.bodyRows
-    const effort =
-      state.model && state.effort && supportedEfforts(state.model, state.models).length
-        ? ` (${state.effort})`
-        : ''
-    const permissions = renderPermissions(
+    return renderPane(
       elements,
-      state.permissions,
-      answers,
+      {
+        state,
+        width: e.props.bodyColumns,
+        columns,
+        rows: e.props.scroll.bodyRows,
+        composer: (
+          <Client
+            key={`side-composer-${generation}`}
+            module="./composer.tsx"
+            width={columns}
+            props={composerProps()}
+          />
+        ),
+        answers,
+        expanded,
+        localError,
+        localNotice,
+        busy: sending || state.status === 'working' || state.status === 'permission',
+        connected: !!endpoint,
+        refreshing,
+        mainAhead,
+      },
       {
         invalidate: host.invalidate,
         setError: (message) => {
@@ -504,125 +512,18 @@ export const register: Register = (on) => {
         },
         decide: (id, allow, answers) =>
           action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
+        toggleEditing: () => action('/edit', { canEdit: !state.canEdit }),
+        onToggle: (key) => {
+          follow = false
+          host.invalidate()
+          host.after(80, () => {
+            if (opened) host.reveal(key)
+          })
+        },
+        refresh,
+        retry: connect,
+        stop: () => action('/stop'),
       },
-      state.cwd,
-    )
-    const composer = (
-      <Client
-        key={`side-composer-${generation}`}
-        module="./composer.tsx"
-        width={columns}
-        props={composerProps()}
-      />
-    )
-    // Messages get what the rest of the pane leaves of the drawing limit.
-    const budget = treeLimit - JSON.stringify([permissions, composer]).length - 5000
-    return (
-      <Box
-        flexDirection="column"
-        paddingX={1}
-        minHeight={e.props.scroll.bodyRows}
-        width={e.props.bodyColumns}
-      >
-        <Box gap={2} paddingRight={2}>
-          <Text bold>Side chat</Text>
-          <Box flexShrink={1}>
-            <Text dimColor wrap="truncate-end">
-              {state.model ? `${modelLabel(state.model, state.models)}${effort}` : ''}
-            </Text>
-          </Box>
-          <Box>
-            {state.canEdit === undefined ? null : (
-              <Button
-                key="edit-side"
-                plain
-                dimColor={!state.canEdit}
-                label={state.canEdit ? 'can edit' : 'read-only'}
-                onPress={async () => {
-                  await action('/edit', { canEdit: !state.canEdit })
-                }}
-              />
-            )}
-          </Box>
-        </Box>
-        <Box flexDirection="column" flexGrow={1} paddingTop={1} width={columns}>
-          {renderMessages(elements, state.messages, {
-            columns,
-            expanded,
-            onToggle: (key) => {
-              follow = false
-              host.invalidate()
-              host.after(80, () => {
-                if (opened) host.reveal(key)
-              })
-            },
-            cwd: state.cwd,
-            budget,
-          })}
-        </Box>
-        {/* Keep the editor's ancestor/sibling positions stable. The terminal
-          focus region can remount when conditional siblings appear. */}
-        {permissions}
-        <Box>
-          {localError || state.error ? (
-            <Text color="error">{localError || state.error}</Text>
-          ) : null}
-        </Box>
-        <Box marginTop={1} flexDirection="column" width={columns}>
-          {/* Like main's own hints: one quiet line, the notice left and staleness right. */}
-          <Box justifyContent="space-between">
-            <Box flexShrink={1}>
-              {notice ? (
-                <Text dimColor wrap="truncate-end">
-                  {notice}
-                </Text>
-              ) : null}
-            </Box>
-            <Box>
-              {mainAhead > 0 && !refreshing ? (
-                <Box gap={1}>
-                  <Text dimColor>
-                    {`main is ${mainAhead} ${mainAhead === 1 ? 'reply' : 'replies'} ahead ·`}
-                  </Text>
-                  <Button
-                    key="refresh-side"
-                    plain
-                    label="/refresh"
-                    onPress={async () => {
-                      await refresh()
-                    }}
-                  />
-                </Box>
-              ) : null}
-            </Box>
-          </Box>
-          <Box>
-            {state.status === 'error' && !endpoint ? (
-              <Button
-                key="retry-side"
-                label="Retry"
-                onPress={async () => {
-                  await connect()
-                }}
-              />
-            ) : null}
-          </Box>
-          {composer}
-          <Box gap={2} justifyContent="flex-end">
-            <Text dimColor>Esc main</Text>
-            {busy ? (
-              <Button
-                key="stop-side"
-                plain
-                label="Stop"
-                onPress={async () => {
-                  await action('/stop')
-                }}
-              />
-            ) : null}
-          </Box>
-        </Box>
-      </Box>
     )
   })
   on('ui.message', { component: 'Pane' }, async ($, e, next) => {
