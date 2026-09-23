@@ -336,7 +336,13 @@ export class Conversation {
     settle(
       allow
         ? { behavior: 'allow', updatedInput }
-        : { behavior: 'deny', message: 'The user declined this action in side chat.' },
+        : {
+            behavior: 'deny',
+            message:
+              permission.tool === 'AskUserQuestion'
+                ? 'The user chose not to answer.'
+                : 'The user declined this action in side chat.',
+          },
     )
   }
 

@@ -388,6 +388,30 @@ test('question controls require an answer, preserve the editor, and send the cho
   expect((await h.editor()).props.key).toBe(before.props.key)
 })
 
+test('questions mark picked options, send on Enter once answered, and can be skipped', async () => {
+  const h = await harness('permission', [
+    {
+      id: 'q',
+      tool: 'AskUserQuestion',
+      input: {
+        questions: [{ question: 'Which color?', options: [{ label: 'Cyan' }, { label: 'Teal' }] }],
+      },
+    },
+  ])
+  await h.command()
+  const control = async (key: string) => (await h.render()).find((n) => n.props.key === key)!
+  expect((await control('deny-q')).props.label).toBe('Skip')
+  await (await control('answer-q-0-1')).props.onPress()
+  expect((await control('answer-q-0-1')).props.label).toBe('✓ Teal')
+  expect((await control('answer-q-0-0')).props.label).toBe('Cyan')
+  await (await control('answer-text-q-0')).props.onSubmit('Teal')
+  expect(h.requests.find((r) => r.path === '/permission')?.body).toEqual({
+    id: 'q',
+    allow: true,
+    answers: { 'Which color?': 'Teal' },
+  })
+})
+
 test('tool permission controls send the explicit allow or deny decision', async () => {
   for (const allow of [true, false]) {
     const h = await harness('permission', [

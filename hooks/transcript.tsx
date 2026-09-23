@@ -173,6 +173,19 @@ export function renderPermissions(
     <Box flexDirection="column">
       {permissions.map((permission) => {
         const questions = questionsFor(permission)
+        const picked = (question: string) => (answers[permission.id]?.[question] ?? '').split(', ')
+        const allow = async () => {
+          if (questions.some((q) => !answers[permission.id]?.[q.question]?.trim())) {
+            actions.setError('Answer each question before sending.')
+            return
+          }
+          actions.setError('')
+          await actions.decide(
+            permission.id,
+            true,
+            questions.length ? answers[permission.id] : undefined,
+          )
+        }
         return (
           <Box key={permission.id} flexDirection="column" borderStyle="round" paddingX={1}>
             <Text bold color="warning">
@@ -204,7 +217,11 @@ export function renderPermissions(
                     <Box key={`${permission.id}-${index}-${i}`} flexDirection="column">
                       <Button
                         key={`answer-${permission.id}-${index}-${i}`}
-                        label={option.label}
+                        label={
+                          picked(q.question).includes(option.label)
+                            ? `✓ ${option.label}`
+                            : option.label
+                        }
                         onPress={() => {
                           answers[permission.id] ??= {}
                           const chosen = q.multiSelect
@@ -229,9 +246,7 @@ export function renderPermissions(
                       answers[permission.id] ??= {}
                       answers[permission.id][q.question] = value
                     }}
-                    onSubmit={() => {
-                      actions.invalidate()
-                    }}
+                    onSubmit={allow}
                   />
                 </Box>
               ))
@@ -241,7 +256,7 @@ export function renderPermissions(
             <Box gap={2}>
               <Button
                 key={`deny-${permission.id}`}
-                label="Deny"
+                label={questions.length ? 'Skip' : 'Deny'}
                 autoFocus={permission.defaultToNo ? true : undefined}
                 onPress={async () => {
                   await actions.decide(permission.id, false)
@@ -249,19 +264,8 @@ export function renderPermissions(
               />
               <Button
                 key={`allow-${permission.id}`}
-                label={permission.tool === 'AskUserQuestion' ? 'Send answer' : 'Allow once'}
-                onPress={async () => {
-                  if (questions.some((q) => !answers[permission.id]?.[q.question]?.trim())) {
-                    actions.setError('Answer each question before sending.')
-                    return
-                  }
-                  actions.setError('')
-                  await actions.decide(
-                    permission.id,
-                    true,
-                    permission.tool === 'AskUserQuestion' ? answers[permission.id] : undefined,
-                  )
-                }}
+                label={questions.length ? 'Send answer' : 'Allow once'}
+                onPress={allow}
               />
             </Box>
           </Box>

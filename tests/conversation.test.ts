@@ -193,6 +193,18 @@ test('permission decisions are once-only, abortable, and denied when the pane cl
   expect(h.chat.state.permissions).toHaveLength(0)
 })
 
+test('skipping a question tells Claude the user chose not to answer', async () => {
+  const h = harness()
+  const pending = h.options.canUseTool!(
+    'AskUserQuestion',
+    { questions: [] },
+    { signal: new AbortController().signal, suggestions: [], toolUseID: 't', requestId: 'r' },
+  )
+  h.chat.decide(h.chat.state.permissions[0]!.id, false)
+  expect(await pending).toEqual({ behavior: 'deny', message: 'The user chose not to answer.' })
+  h.chat.close()
+})
+
 test('permission metadata crosses the bridge without persisting an allow rule', async () => {
   const h = harness()
   const metadata = {
