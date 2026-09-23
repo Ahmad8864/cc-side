@@ -35,6 +35,7 @@ Mods APIs can change between releases.
   `/edit on`, or clicking `read-only` in the header, allows edits. New side chats
   start the way you last chose.
 - Tools request approval in the pane. Stop interrupts the current reply.
+- `/insert` puts the last reply in the main prompt at the cursor; `/copy` copies it.
 - Tool rows show compact arguments and output. Click a row to expand its details.
 - Escape returns to main. ×, `/close`, or `/side close` discards the side chat and draft.
 - A rejected `/side` question returns to the main prompt for retry. It is not queued.

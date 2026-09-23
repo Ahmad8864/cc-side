@@ -35,6 +35,8 @@ export const register: Register = (on) => {
     closePane: () => Promise<void>
     readEditing: () => Promise<boolean>
     saveEditing: (canEdit: boolean) => Promise<void>
+    insertInMain: (text: string) => Promise<boolean>
+    copy: (text: string) => Promise<boolean>
   }
   let opened = false
   let generation = 0
@@ -42,6 +44,7 @@ export const register: Register = (on) => {
   let state = empty()
   let draft = ''
   let localError = ''
+  let localNotice = ''
   let sending = false
   let connecting = false
   let tracePath: string | undefined
@@ -74,6 +77,32 @@ export const register: Register = (on) => {
     effort: state.effort ?? '',
     canEdit: state.canEdit ?? false,
   })
+
+  const notify = (message: string) => {
+    localNotice = message
+    host.invalidate()
+    host.after(5000, () => {
+      if (localNotice !== message) return
+      localNotice = ''
+      host.invalidate()
+    })
+  }
+
+  // The host, not the side's Claude, reaches the main prompt and the clipboard.
+  const shareReply = async (command: string) => {
+    const reply = state.messages.findLast((message) => message.role === 'assistant')
+    if (!reply?.text) notify('There is no reply to share yet.')
+    else if (command === '/insert')
+      notify(
+        (await host.insertInMain(reply.text))
+          ? 'Inserted the last reply in the main prompt. Esc switches to it.'
+          : 'The main prompt is not available right now.',
+      )
+    else
+      notify((await host.copy(reply.text)) ? 'Copied the last reply.' : 'Could not copy the reply.')
+    draft = ''
+    return true
+  }
 
   // New side chats start with the edit setting the user chose last.
   const rememberEditing = () => {
@@ -159,8 +188,10 @@ export const register: Register = (on) => {
       state.status === 'permission'
     )
       return false
+    if (text.trim() === '/insert' || text.trim() === '/copy') return shareReply(text.trim())
     sending = true
     localError = ''
+    localNotice = ''
     answers = {}
     const epoch = generation
     try {
@@ -276,6 +307,8 @@ export const register: Register = (on) => {
         await close()
         await $.ui.close({ id: PANE })
       },
+      insertInMain: async (text) => (await $.prompt.fill({ text, mode: 'insert' })).isFilled,
+      copy: async (text) => (await $.ui.copy({ text })).isCopied,
       readEditing: async () => (await $.store.get('canEdit')) === true,
       saveEditing: async (canEdit) => {
         await $.store.set('canEdit', canEdit)
@@ -464,8 +497,10 @@ export const register: Register = (on) => {
         </Box>
         <Box marginTop={1} flexDirection="column" width={columns}>
           <Box>
-            {state.status === 'starting' || state.notice ? (
-              <Text dimColor>{state.status === 'starting' ? 'Connecting…' : state.notice}</Text>
+            {state.status === 'starting' || localNotice || state.notice ? (
+              <Text dimColor>
+                {state.status === 'starting' ? 'Connecting…' : localNotice || state.notice}
+              </Text>
             ) : null}
           </Box>
           <Box>

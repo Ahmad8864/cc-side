@@ -39,6 +39,7 @@ async function harness(
   const timers: (() => void)[] = []
   const scrolls: unknown[] = []
   const focuses: unknown[] = []
+  const copies: string[] = []
   let prompt = ''
   let startup: string | undefined
   let state: ChatState
@@ -106,6 +107,10 @@ async function harness(
       focus: async (args: unknown) => {
         focuses.push(args)
         return {}
+      },
+      copy: async ({ text }: { text: string }) => {
+        copies.push(text)
+        return { isCopied: true }
       },
       scroll: async (args: unknown) => {
         scrolls.push(args)
@@ -184,6 +189,7 @@ async function harness(
     timers,
     scrolls,
     focuses,
+    copies,
     prompt: () => prompt,
     setPrompt: (text: string) => {
       prompt = text
@@ -519,6 +525,23 @@ test('polling rides out brief bridge failures and reports a lasting disconnect',
   h.failPolls(5)
   for (let i = 0; i < 5; i++) await tick()
   expect(JSON.stringify(await h.render())).toContain('disconnected')
+})
+
+test('/insert and /copy share the last reply without buttons under every reply', async () => {
+  const h = await harness('ready', [], undefined, [
+    { id: 'q', role: 'user', text: 'What should run first?' },
+    { id: 'a', role: 'assistant', text: 'Run the migration first.' },
+  ])
+  await h.command()
+  expect((await h.render()).filter((n) => n.tag === 'Button').map((n) => n.props.key)).toEqual([
+    'edit-side',
+  ])
+  expect((await h.submit('first', 1, '/insert')).props.receipt.accepted).toBe(true)
+  expect(h.prompt()).toBe('Run the migration first.')
+  expect(JSON.stringify(await h.render())).toContain('Inserted the last reply')
+  await h.submit('first', 2, '/copy')
+  expect(h.copies).toEqual(['Run the migration first.'])
+  expect(h.requests.some((r) => r.path === '/send')).toBe(false)
 })
 
 test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {
