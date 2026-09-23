@@ -1,4 +1,5 @@
 import { stripVTControlCharacters } from 'node:util'
+import { cleanInput } from '../shared/editor.ts'
 
 const outputLimit = 6000
 
@@ -20,10 +21,7 @@ function contentText(content: unknown): string {
 }
 
 export function toolOutput(content: unknown) {
-  const text = stripVTControlCharacters(contentText(content))
-    .replace(/\r\n?/g, '\n')
-    .replace(/\t/g, '  ')
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+  const text = cleanInput(stripVTControlCharacters(contentText(content)))
   const truncated = text.length > outputLimit
   return {
     text: truncated
