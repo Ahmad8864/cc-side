@@ -2,6 +2,7 @@ import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import manifest from '../.claude-plugin/plugin.json'
+import { version } from '../package.json'
 
 const root = fileURLToPath(new URL('..', import.meta.url).href)
 const dist = join(root, 'dist')
@@ -11,6 +12,9 @@ const repository = process.env.GITHUB_REPOSITORY ?? 'Ahmad8864/cc-side'
 if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid GitHub repository')
 if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== tag) {
   throw new Error(`Release tag must match plugin version: ${tag}`)
+}
+if (version !== manifest.version) {
+  throw new Error(`package.json version ${version} must match plugin version ${manifest.version}`)
 }
 
 async function run(command: string[], cwd = root) {
