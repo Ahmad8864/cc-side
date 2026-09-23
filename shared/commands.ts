@@ -29,9 +29,10 @@ export function parseCommand(text: string) {
 
 export function modelLabel(model: string, models: SideModel[] = []) {
   const entry = models.find((m) => m.value === model || m.resolvedModel === model)
-  // The catalog's description includes the version; displayName often does not.
+  // Some catalogs name the version before " · " in the description, others in displayName.
+  const [version, summary] = entry?.description.split(' · ') ?? []
   return (
-    entry?.description.split(' · ')[0] ||
+    (summary ? version : entry?.displayName) ||
     model
       .replace(/^claude-/, '')
       .replace(/\[1m\]/, ' (1M context)')
