@@ -9,6 +9,7 @@ import type {
 import { effortLevels, localCommands } from '../shared/commands.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
+import type { Answers } from './permissions.tsx'
 
 export type BridgePath = '/state' | '/send' | '/permission' | '/edit' | '/stop' | '/close'
 export type StartChoices = Partial<Pick<StartOptions, 'model' | 'effort' | 'canEdit' | 'carried'>>
@@ -70,7 +71,7 @@ export class SideChat {
   private draft = ''
   private localError = ''
   private localNotice = ''
-  private answers: Record<string, Record<string, string>> = {}
+  private answers: Answers = {}
   private readonly expanded = new Set<string>()
   private receipt: Receipt | null = null
   private readonly receipts = new Map<string, Receipt>()

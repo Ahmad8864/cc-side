@@ -2,7 +2,8 @@ import type { Elements, RenderElement } from 'claude-code'
 import type { ChatState } from '../shared/protocol.ts'
 import { modelLabel, supportedEfforts } from '../shared/commands.ts'
 import { treeLimit } from '../shared/limits.ts'
-import { renderMessages, renderPermissions } from './transcript.tsx'
+import { renderPermissions, type Answers } from './permissions.tsx'
+import { renderMessages } from './transcript.tsx'
 
 export type PaneView = {
   state: ChatState
@@ -11,7 +12,7 @@ export type PaneView = {
   columns: number
   rows: number
   composer: RenderElement
-  answers: Record<string, Record<string, string>>
+  answers: Answers
   expanded: Set<string>
   localError: string
   localNotice: string

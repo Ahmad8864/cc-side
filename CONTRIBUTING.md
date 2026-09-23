@@ -18,7 +18,8 @@ bun run dev         # run the source plugin
 - `hooks/register.tsx`: the hooks, the engine calls behind `Host`, and the bridge client.
 - `hooks/side-chat.ts`: the side chat's helper lifecycle, polling, and send acknowledgements.
 - `hooks/pane.tsx`: the pane's layout: header, transcript, notices, and the composer's place.
-- `hooks/transcript.tsx`: messages and permission controls.
+- `hooks/transcript.tsx`: messages and tool rows.
+- `hooks/permissions.tsx`: approvals and Claude's questions.
 - `hooks/composer.tsx`: the drawing-thread editor and activity indicator.
 - `bridge/conversation.ts`: the Agent SDK session, commands, and streamed events.
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
