@@ -71,7 +71,12 @@ export const register: Register = (on) => {
   const trace = (kind: string, data: unknown) => {
     if (!tracePath) return
     events.push({ at: Date.now(), kind, data })
-    const json = JSON.stringify({ events }, null, 2)
+    let json = JSON.stringify({ events }, null, 2)
+    // $.fs.write refuses over 4 MiB of UTF-8, so keep the newest events that fit.
+    while (json.length > 1000000 && events.length > 1) {
+      events.splice(0, Math.ceil(events.length / 4))
+      json = JSON.stringify({ events }, null, 2)
+    }
     writes = writes.then(() => host.write(tracePath!, json)).catch(() => {})
   }
   const poll = async (epoch: number, failures = 0) => {
