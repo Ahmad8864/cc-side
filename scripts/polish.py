@@ -5,26 +5,18 @@ Consumes two short model turns. Never point this at a personal conversation.
 """
 import json
 import shutil
-import socket
 import sys
 import time
 from pathlib import Path
+
+from terminal import request
 
 ROOT = Path(__file__).resolve().parents[1]
 CASE = (ROOT / sys.argv[1]).resolve()
 
 
 def call(command='screen', text=''):
-    request = {'command': command, 'text': text}
-    if command == 'resize':
-        request.update(zip(['rows', 'columns'], map(int, text.split('x'))))
-    with socket.socket(socket.AF_UNIX) as sock:
-        sock.connect(str(CASE / 'terminal.sock'))
-        sock.sendall(json.dumps(request).encode())
-        data = b''
-        while chunk := sock.recv(65536):
-            data += chunk
-    return json.loads(data)['screen']
+    return request(CASE, command, text)
 
 
 def key(text):

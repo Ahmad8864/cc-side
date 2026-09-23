@@ -104,7 +104,7 @@ def serve(directory):
             except socket.timeout:
                 continue
             with conn:
-                req = json.loads(conn.recv(65536))
+                req = json.loads(receive(conn))
                 cmd = req['command']
                 if cmd == 'send':
                     child.send('\x1b[200~' + req['text'] + '\x1b[201~')
@@ -126,17 +126,24 @@ def serve(directory):
         log.close()
 
 
-def client(command, directory, text):
-    request = {'command': command, 'text': text}
+def receive(sock):
+    """Reads until the sender closes its side: one recv can return part of a message."""
+    chunks = []
+    while chunk := sock.recv(65536):
+        chunks.append(chunk)
+    return b''.join(chunks)
+
+
+def request(directory, command, text=''):
+    """Sends one command to a running harness and returns the screen after it."""
+    message = {'command': command, 'text': text}
     if command == 'resize':
-        request.update(zip(['rows', 'columns'], map(int, text.split('x'))))
+        message.update(zip(['rows', 'columns'], map(int, text.split('x'))))
     with socket.socket(socket.AF_UNIX) as s:
         s.connect(str(directory / 'terminal.sock'))
-        s.sendall(json.dumps(request).encode())
-        chunks = []
-        while chunk := s.recv(65536):
-            chunks.append(chunk)
-    print(json.loads(b''.join(chunks))['screen'])
+        s.sendall(json.dumps(message).encode())
+        s.shutdown(socket.SHUT_WR)
+        return json.loads(receive(s))['screen']
 
 
 if __name__ == '__main__':
@@ -145,4 +152,4 @@ if __name__ == '__main__':
     if action == 'serve':
         serve(folder)
     else:
-        client(action, folder, sys.argv[3] if len(sys.argv) > 3 else '')
+        print(request(folder, action, sys.argv[3] if len(sys.argv) > 3 else ''))
