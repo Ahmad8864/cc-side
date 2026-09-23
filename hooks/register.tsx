@@ -1,350 +1,22 @@
 import type { EngineInterface, Register } from 'claude-code'
-import type {
-  ChatState,
-  EffortLevel,
-  Endpoint,
-  Receipt,
-  StartOptions,
-  StartupResult,
-  Submission,
-} from '../shared/protocol.ts'
-import { effortLevels, localCommands } from '../shared/commands.ts'
-import type { ComposerProps } from './composer.tsx'
+import type { ChatState, Endpoint, StartOptions, StartupResult } from '../shared/protocol.ts'
+import { effortLevels } from '../shared/commands.ts'
 import { renderPane } from './pane.tsx'
+import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 
 const PANE = 'side'
 const paneColumns = (columns: number) => Math.max(45, Math.floor(columns * 0.44))
-const empty = (): ChatState => ({
-  revision: -1,
-  status: 'starting',
-  messages: [],
-  permissions: [],
-  requests: [],
-  textDeltas: 0,
-})
 
 export const register: Register = (on) => {
-  let host: BridgeClient & {
-    write: (path: string, text: string) => Promise<void>
-    invalidate: () => void
-    after: (ms: number, fn: () => void) => void
-    scroll: () => void
-    reveal: (key: string) => void
-    focus: (key: string) => Promise<void>
-    closePane: () => Promise<void>
-    readEditing: () => Promise<boolean>
-    saveEditing: (canEdit: boolean) => Promise<void>
-    insertInMain: (text: string) => Promise<boolean>
-    copy: (text: string) => Promise<boolean>
-  }
-  let opened = false
-  // generation names an opened side chat and its composer; connection names the
-  // helper serving it, which a refresh replaces without disturbing the composer.
-  let generation = 0
-  let connection = 0
-  let endpoint: Endpoint | undefined
-  let state = empty()
-  let draft = ''
-  let localError = ''
-  let localNotice = ''
-  let sending = false
-  let connecting = false
-  let tracePath: string | undefined
-  const events: unknown[] = []
-  let writes = Promise.resolve()
-  let follow = true
-  let answers: Record<string, Record<string, string>> = {}
-  let receipt: Receipt | null = null
-  const receipts = new Map<string, Receipt>()
-  const pendingSubmissions = new Map<string, Promise<boolean>>()
-  let commandSequence = 0
-  let composerColumns = 70
-  let composerRows = 40
+  const chat = new SideChat()
   let viewportColumns = 0
-  const expanded = new Set<string>()
-  let focusedPermission: string | undefined
-  let mainEffort: EffortLevel | undefined
-  let savedEditing = false
-  // Main replies that finished since the side forked, and a refresh in flight.
-  let mainAhead = 0
-  let refreshing = false
-  const composerProps = (): ComposerProps => ({
-    epoch: generation,
-    seed: draft,
-    receipt,
-    busy: sending || refreshing || state.status === 'working' || state.status === 'permission',
-    activity: state.status === 'working' ? (state.activity ?? null) : null,
-    columns: composerColumns,
-    maxRows: Math.max(2, Math.min(8, Math.floor(composerRows / 4))),
-    commands: state.commands ?? localCommands,
-    models: state.models ?? [],
-    model: state.model ?? '',
-    effort: state.effort ?? '',
-    canEdit: state.canEdit ?? false,
-  })
-
-  const notify = (message: string) => {
-    localNotice = message
-    host.invalidate()
-    host.after(5000, () => {
-      if (localNotice !== message) return
-      localNotice = ''
-      host.invalidate()
-    })
-  }
-
-  // The host, not the side's Claude, reaches the main prompt and the clipboard.
-  const shareReply = async (command: string) => {
-    const reply = state.messages.findLast((message) => message.role === 'assistant')
-    if (!reply?.text) notify('There is no reply to share yet.')
-    else if (command === '/insert')
-      notify(
-        (await host.insertInMain(reply.text))
-          ? 'Inserted the last reply in the main prompt. Esc switches to it.'
-          : 'The main prompt is not available right now.',
-      )
-    else
-      notify((await host.copy(reply.text)) ? 'Copied the last reply.' : 'Could not copy the reply.')
-    draft = ''
-    return true
-  }
-
-  // New side chats start with the edit setting the user chose last.
-  const rememberEditing = () => {
-    if (state.canEdit === undefined || state.canEdit === savedEditing) return
-    savedEditing = state.canEdit
-    void host.saveEditing(savedEditing)
-  }
-
-  const trace = (kind: string, data: unknown) => {
-    if (!tracePath) return
-    events.push({ at: Date.now(), kind, data })
-    let json = JSON.stringify({ events }, null, 2)
-    // $.fs.write refuses over 4 MiB of UTF-8, so keep the newest events that fit.
-    while (json.length > 1000000 && events.length > 1) {
-      events.splice(0, Math.ceil(events.length / 4))
-      json = JSON.stringify({ events }, null, 2)
-    }
-    writes = writes.then(() => host.write(tracePath!, json)).catch(() => {})
-  }
-  const poll = async (epoch: number, failures = 0) => {
-    if (epoch !== connection || !endpoint) return
-    try {
-      const result: ChatState = await host.request(endpoint, '/state')
-      if (epoch !== connection) return
-      if (result.revision > state.revision) {
-        state = result
-        rememberEditing()
-        trace('side.state', state)
-        host.invalidate()
-        if (follow)
-          host.after(80, () => {
-            if (opened && follow) host.scroll()
-          })
-      }
-    } catch (error) {
-      if (epoch !== connection) return
-      // A busy or waking machine can miss a request; a stopped helper misses them all.
-      if (failures < 4) {
-        host.after(1000, () => {
-          void poll(epoch, failures + 1)
-        })
-        return
-      }
-      localError = `Side process disconnected. Close and reopen /side. ${String(error)}`
-      host.invalidate()
-      return
-    }
-    host.after(state.status === 'working' ? 120 : 700, () => {
-      void poll(epoch)
-    })
-  }
-  const action = async (path: BridgePath, body?: unknown) => {
-    if (!endpoint) return false
-    const epoch = connection
-    try {
-      const result: ChatState = await host.request(endpoint, path, body)
-      if (epoch === connection && result.revision >= state.revision) {
-        state = result
-        rememberEditing()
-      }
-      return epoch === connection
-    } catch (error) {
-      if (epoch === connection) localError = String(error)
-      return false
-    } finally {
-      if (epoch === connection) host.invalidate()
-    }
-  }
-  const send = async (
-    text: string,
-    id = `${generation}:command:${++commandSequence}`,
-  ): Promise<boolean> => {
-    if (text.trim() === '/close') {
-      await host.closePane()
-      return true
-    }
-    if (text.trim() === '/stop') return action('/stop')
-    if (
-      !text.trim() ||
-      sending ||
-      refreshing ||
-      !endpoint ||
-      state.status === 'working' ||
-      state.status === 'permission'
-    )
-      return false
-    if (text.trim() === '/insert' || text.trim() === '/copy') return shareReply(text.trim())
-    if (text.trim() === '/refresh') {
-      void refresh()
-      return true
-    }
-    sending = true
-    localError = ''
-    localNotice = ''
-    answers = {}
-    const epoch = connection
-    try {
-      const result: ChatState = await host.request(endpoint, '/send', { id, text: text.trim() })
-      if (epoch !== connection) return false
-      draft = ''
-      if (result.revision >= state.revision) {
-        state = result
-        rememberEditing()
-      }
-      trace('side.state', state)
-      follow = true
-      host.after(50, () => {
-        if (opened) host.scroll()
-      })
-      return true
-    } catch (error) {
-      if (epoch === connection) localError = error instanceof Error ? error.message : String(error)
-      return false
-    } finally {
-      if (epoch === connection) {
-        sending = false
-        host.invalidate()
-      }
-    }
-  }
-  const connect = async () => {
-    if (!opened || connecting) return
-    connecting = true
-    mainAhead = 0
-    state = empty()
-    localError = ''
-    follow = true
-    generation++
-    const epoch = ++connection
-    receipt = null
-    receipts.clear()
-    pendingSubmissions.clear()
-    host.invalidate()
-    try {
-      savedEditing = await host.readEditing()
-      const started = await host.start(
-        await host.options({ effort: mainEffort, canEdit: savedEditing }),
-      )
-      if (epoch !== connection) {
-        await host.request(started, '/close')
-        return
-      }
-      endpoint = started
-      trace('side.opened', { pid: started.pid, placement: 'right' })
-      void poll(epoch)
-    } catch (error) {
-      if (epoch === connection) {
-        localError = error instanceof Error ? error.message : String(error)
-        state.status = 'error'
-        host.invalidate()
-      }
-    } finally {
-      if (epoch === connection) connecting = false
-    }
-  }
-  // Re-fork at main's latest point, keeping this discussion, the composer, and the side's
-  // choices. The old helper serves until the new one is up, so a failure changes nothing.
-  const refresh = async () => {
-    const old = endpoint
-    if (!old || refreshing) return false
-    if (sending || state.status === 'working' || state.status === 'permission') {
-      notify('Wait for the current reply, or stop it first.')
-      return false
-    }
-    const chat = generation
-    const counted = mainAhead
-    refreshing = true
-    localError = ''
-    host.invalidate()
-    try {
-      const started = await host.start(
-        await host.options({
-          ...(state.model ? { model: state.model } : {}),
-          effort: effortLevels.find((level) => level === state.effort),
-          canEdit: state.canEdit,
-          carried: state.messages,
-        }),
-      )
-      if (chat !== generation || !opened) {
-        await host.request(started, '/close')
-        return false
-      }
-      endpoint = started
-      mainAhead -= counted
-      state = { ...state, revision: -1 }
-      const epoch = ++connection
-      trace('side.refreshed', { pid: started.pid })
-      void poll(epoch)
-      void host.request(old, '/close').catch(() => {})
-      return true
-    } catch (error) {
-      if (chat === generation) localError = error instanceof Error ? error.message : String(error)
-      return false
-    } finally {
-      if (chat === generation) {
-        refreshing = false
-        host.invalidate()
-      }
-    }
-  }
-  const close = async () => {
-    if (!opened && !endpoint && !connecting) return
-    const old = endpoint
-    generation++
-    connection++
-    opened = false
-    mainAhead = 0
-    refreshing = false
-    endpoint = undefined
-    state = empty()
-    draft = ''
-    answers = {}
-    sending = false
-    connecting = false
-    localError = ''
-    receipt = null
-    receipts.clear()
-    pendingSubmissions.clear()
-    expanded.clear()
-    viewportColumns = 0
-    host.invalidate()
-    if (old) {
-      try {
-        await host.request(old, '/close')
-      } catch (error) {
-        trace('side.close-error', String(error))
-      }
-    }
-    trace('side.closed', {})
-  }
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     if (!e.isInteractive || (await $.env.get('CC_SIDE_WORKER'))) return result
     const bun = await $.env.get('CC_SIDE_BUN')
     const helper = bun ? [bun, `${$.plugin.root}/bridge/main.ts`] : [`${$.plugin.root}/bin/cc-side`]
-    host = {
+    chat.host = {
       ...createBridgeClient($, helper),
       write: (path, text) => $.fs.write(path, text),
       invalidate: () => {
@@ -364,7 +36,7 @@ export const register: Register = (on) => {
       },
       // Discard explicitly: hiding the host pane is not our state lifecycle.
       closePane: async () => {
-        await close()
+        await chat.close()
         await $.ui.close({ id: PANE })
       },
       insertInMain: async (text) => (await $.prompt.fill({ text, mode: 'insert' })).isFilled,
@@ -374,47 +46,41 @@ export const register: Register = (on) => {
         await $.store.set('canEdit', canEdit)
       },
     }
-    tracePath = (await $.env.get('CC_SIDE_TRACE')) ?? undefined
+    chat.tracePath = (await $.env.get('CC_SIDE_TRACE')) ?? undefined
     await $.command.register({
       name: 'side',
       description: 'Open an independent chat beside this conversation',
       argumentHint: '[question] | close | stats',
       immediate: true,
     })
-    trace('session.start', { id: await $.session.id(), cwd: e.cwd, model: await $.session.model() })
+    chat.trace('session.start', {
+      id: await $.session.id(),
+      cwd: e.cwd,
+      model: await $.session.model(),
+    })
     return result
   })
   on('command.run', { command: 'side' }, async ($, e) => {
     const arg = e.args.trim()
     if (arg === 'close') {
-      await host.closePane()
+      await chat.host.closePane()
       return {}
     }
     if (arg === 'stats') {
-      trace('snapshot', {
-        state,
+      chat.trace('snapshot', {
+        state: chat.state,
         parent: await $.session.messages(),
         tools: (await $.tool.list()).map((t) => t.name),
       })
-      await writes
-      const reads = state.requests.reduce(
-        (sum, r) => sum + (r.usage.cache_read_input_tokens ?? 0),
-        0,
-      )
-      const writesCount = state.requests.reduce(
-        (sum, r) => sum + (r.usage.cache_creation_input_tokens ?? 0),
-        0,
-      )
-      return {
-        text: `Side chat: ${state.status} · ${state.requests.length} model requests · cache read ${reads} / write ${writesCount} tokens · ${state.textDeltas} text deltas`,
-      }
+      await chat.flushed()
+      return { text: chat.stats() }
     }
     if (!e.presentation.isFullscreen || e.presentation.columns < 110) {
       return {
         text: 'Side chat needs fullscreen rendering and a terminal at least 110 columns wide. Enable fullscreen with /tui, then run /side.',
       }
     }
-    opened = true
+    chat.opened = true
     viewportColumns = e.presentation.columns
     await $.ui.open({
       id: PANE,
@@ -422,36 +88,27 @@ export const register: Register = (on) => {
       focus: true,
       columns: paneColumns(viewportColumns),
     })
-    if (!endpoint) await connect()
-    if (arg) {
-      const epoch = generation
-      const busy = sending || state.status === 'working' || state.status === 'permission'
-      const accepted = endpoint && (await send(arg))
-      if (!accepted && epoch === generation && opened) {
-        const reason = busy
-          ? 'Side chat is busy. Wait for the reply or stop it, then retry.'
-          : localError || 'Side chat is not ready yet. Retry once it is connected.'
-        // Put the rejected command back where it was entered. Never replace
-        // another draft, including text typed while the request was in flight.
-        let restored = false
-        try {
-          const prompt = await $.prompt.read()
-          if (!prompt.text)
-            restored = (await $.prompt.fill({ text: `/side ${arg}`, mode: 'insert' })).isFilled
-        } catch {
-          /* The visible response below still preserves the question. */
-        }
-        return {
-          text: restored
-            ? `${reason} Your question is back in the prompt.`
-            : `${reason}\n\nNot sent:\n${arg}`,
-        }
-      }
+    if (!chat.connected) await chat.connect()
+    const reason = arg ? await chat.ask(arg) : undefined
+    if (!reason) return {}
+    // Put the rejected command back where it was entered. Never replace
+    // another draft, including text typed while the request was in flight.
+    let restored = false
+    try {
+      const prompt = await $.prompt.read()
+      if (!prompt.text)
+        restored = (await $.prompt.fill({ text: `/side ${arg}`, mode: 'insert' })).isFilled
+    } catch {
+      /* The visible response below still preserves the question. */
     }
-    return {}
+    return {
+      text: restored
+        ? `${reason} Your question is back in the prompt.`
+        : `${reason}\n\nNot sent:\n${arg}`,
+    }
   })
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    if (e.requestId !== PANE || !opened || e.surface !== 'terminal') return next(e)
+    if (e.requestId !== PANE || !chat.opened || e.surface !== 'terminal') return next(e)
     // In a docked Pane, viewport.columns is the MAIN transcript's width.
     // Add this pane and the one-cell divider to recover the terminal width.
     const terminalColumns =
@@ -463,167 +120,72 @@ export const register: Register = (on) => {
         // Updating this pane preserves its session and editor. Omit focus so a
         // window resize does not take the keyboard from either conversation.
         await $.ui.open({ id: PANE, title: 'Side chat', columns: paneColumns(viewportColumns) })
-        trace('side.resized', { columns: viewportColumns, requested: paneColumns(viewportColumns) })
+        chat.trace('side.resized', {
+          columns: viewportColumns,
+          requested: paneColumns(viewportColumns),
+        })
       }
     }
     const elements = await $.ui.resolve(e)
     const { Client } = elements
-    const cautious = state.permissions.find((permission) => permission.defaultToNo)?.id
-    if (cautious !== focusedPermission) {
-      focusedPermission = cautious
-      if (cautious)
-        host.after(80, () => {
-          if (opened && state.permissions.some((permission) => permission.id === cautious))
-            void host.focus(`deny-${cautious}`)
-        })
-    }
+    chat.focusCautiousPermission()
     const columns = e.props.bodyColumns - 2
-    composerColumns = columns
-    composerRows = e.props.scroll.bodyRows
+    chat.resizeComposer(columns, e.props.scroll.bodyRows)
     return renderPane(
       elements,
       {
-        state,
+        ...chat.paneView(),
         width: e.props.bodyColumns,
         columns,
         rows: e.props.scroll.bodyRows,
         composer: (
           <Client
-            key={`side-composer-${generation}`}
+            key={`side-composer-${chat.generation}`}
             module="./composer.tsx"
             width={columns}
-            props={composerProps()}
+            props={chat.composerProps()}
           />
         ),
-        answers,
-        expanded,
-        localError,
-        localNotice,
-        busy: sending || state.status === 'working' || state.status === 'permission',
-        connected: !!endpoint,
-        refreshing,
-        mainAhead,
       },
-      {
-        invalidate: host.invalidate,
-        setError: (message) => {
-          localError = message
-          host.invalidate()
-        },
-        decide: (id, allow, answers) =>
-          action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
-        toggleEditing: () => action('/edit', { canEdit: !state.canEdit }),
-        onToggle: (key) => {
-          follow = false
-          host.invalidate()
-          host.after(80, () => {
-            if (opened) host.reveal(key)
-          })
-        },
-        refresh,
-        retry: connect,
-        stop: () => action('/stop'),
-      },
+      chat.paneActions,
     )
   })
   on('ui.message', { component: 'Pane' }, async ($, e, next) => {
-    if (e.requestId !== PANE || e.element !== `side-composer-${generation}` || !opened)
+    if (e.requestId !== PANE || e.element !== `side-composer-${chat.generation}` || !chat.opened)
       return next(e)
-    const data = e.data as {
-      epoch?: number
-      seq?: number
-      instance?: string
-      text?: string
-      submit?: Submission
-    }
-    if (
-      !data ||
-      data.epoch !== generation ||
-      !Number.isSafeInteger(data.seq) ||
-      data.seq! < 0 ||
-      typeof data.instance !== 'string' ||
-      !/^[a-zA-Z0-9_-]{1,80}$/.test(data.instance) ||
-      typeof data.text !== 'string' ||
-      data.text.length > 50000
-    )
-      return {}
-    const submission = data.submit
-    if (!submission || !receipts.get(submission.id)?.accepted) draft = data.text
-    if (
-      submission &&
-      typeof submission.id === 'string' &&
-      submission.id.startsWith(`${generation}:${data.instance}:`) &&
-      /^[a-zA-Z0-9:_-]{1,160}$/.test(submission.id) &&
-      typeof submission.text === 'string' &&
-      submission.text.length <= 50000
-    ) {
-      const epoch = generation
-      const prior = receipts.get(submission.id)
-      if (prior) receipt = prior
-      else {
-        let pending = pendingSubmissions.get(submission.id)
-        if (!pending) {
-          pending = send(submission.text, submission.id)
-          pendingSubmissions.set(submission.id, pending)
-        }
-        let accepted = false
-        try {
-          accepted = await pending
-        } catch (error) {
-          if (epoch === generation) localError = String(error)
-        }
-        if (epoch !== generation) return {}
-        pendingSubmissions.delete(submission.id)
-        receipt = { id: submission.id, accepted }
-        receipts.set(submission.id, receipt)
-        if (receipts.size > 128) receipts.delete(receipts.keys().next().value!)
-        host.invalidate()
-      }
-    }
-    // Reply on the Client's own channel too; it must not depend on a later
-    // pane redraw to release the pending send after an error or remount.
-    return { props: composerProps() }
+    return chat.receive(e.data)
   })
   on('turn.complete', async ($, e, next) => {
-    // Main-loop replies the open side chat has not seen.
-    if (!e.agentId && endpoint) {
-      mainAhead++
-      host.invalidate()
-    }
+    if (!e.agentId) chat.mainReplied()
     return next(e)
   })
   on('classic.Stop', async ($, e, next) => {
     // A new side chat starts at the effort of the main thread's last turn.
-    if (!e.agent_id) mainEffort = effortLevels.find((level) => level === e.effort?.level)
+    if (!e.agent_id) chat.mainEffort = effortLevels.find((level) => level === e.effort?.level)
     return next(e)
   })
   on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
     const result = await next(e)
     if (e.requestId === PANE && e.origin.kind === 'person' && !result.deny)
-      follow = e.offset >= Math.max(0, e.contentRows - e.bodyRows)
+      chat.follow = e.offset >= Math.max(0, e.contentRows - e.bodyRows)
     return result
   })
   on('ui.close', { id: PANE }, async ($, e, next) => {
-    await close()
+    await chat.close()
     return next(e)
   })
   on('session.end', async ($, e, next) => {
     // /clear ends the session but keeps its panes, and no session.start follows.
-    if (opened) await host.closePane()
-    await writes
+    if (chat.opened) await chat.host.closePane()
+    await chat.flushed()
     return next(e)
   })
 }
 
 // Mods requires engine calls to stay in the registered hook module.
-type BridgePath = '/state' | '/send' | '/permission' | '/edit' | '/stop' | '/close'
-type BridgeClient = ReturnType<typeof createBridgeClient>
-
 function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
-    async options(
-      choices: Partial<Pick<StartOptions, 'model' | 'effort' | 'canEdit' | 'carried'>>,
-    ): Promise<StartOptions> {
+    async options(choices: StartChoices): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
       const { permissions, sandbox } = await $.settings.read()
       return {
@@ -654,11 +216,11 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
       return startup
     },
 
-    async request(connection: Endpoint, path: BridgePath, body?: unknown): Promise<ChatState> {
-      const response = await $.http.fetch(connection.url + path, {
+    async request(endpoint: Endpoint, path: BridgePath, body?: unknown): Promise<ChatState> {
+      const response = await $.http.fetch(endpoint.url + path, {
         method: path === '/state' ? 'GET' : 'POST',
         headers: {
-          Authorization: `Bearer ${connection.token}`,
+          Authorization: `Bearer ${endpoint.token}`,
           'Content-Type': 'application/json',
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

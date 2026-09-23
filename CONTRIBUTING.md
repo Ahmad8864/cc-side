@@ -15,7 +15,8 @@ bun run dev         # run the source plugin
 
 ## Code layout
 
-- `hooks/register.tsx`: pane lifecycle, host events, send acknowledgements, and bridge client.
+- `hooks/register.tsx`: the hooks, the engine calls behind `Host`, and the bridge client.
+- `hooks/side-chat.ts`: the side chat's helper lifecycle, polling, and send acknowledgements.
 - `hooks/pane.tsx`: the pane's layout: header, transcript, notices, and the composer's place.
 - `hooks/transcript.tsx`: messages and permission controls.
 - `hooks/composer.tsx`: the drawing-thread editor and activity indicator.
@@ -38,9 +39,10 @@ The bridge listens on loopback with a random bearer token; it exits when the pan
 stops heartbeating or the parent exits.
 
 Keep engine calls in the registered hook module: Claude's validator will not
-follow `$` into imported helpers. Keep the editor's layout position stable;
-changing its ancestors can reset focus. Client posts are coalesced, so complete
-snapshots and send acknowledgements prevent dropped or duplicate messages.
+follow `$` into imported helpers, so other modules reach the engine through `Host`.
+Keep the editor's layout position stable; changing its ancestors can reset focus.
+Client posts are coalesced, so complete snapshots and send acknowledgements
+prevent dropped or duplicate messages.
 
 ## Terminal checks
 
