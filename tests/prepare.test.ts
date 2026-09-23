@@ -30,6 +30,18 @@ test('a saved parent pins the latest available message, even if it was just save
   )
 })
 
+test('a side chat starts only from a saved session id and an absolute working directory', async () => {
+  const empty = async () => []
+  const start = { ...options, allowEmptyParent: true }
+  await expect(prepareStart({ ...start, parentSessionId: '../other' }, empty)).rejects.toThrow(
+    'Invalid parent session',
+  )
+  await expect(prepareStart({ ...start, cwd: 'project' }, empty)).rejects.toThrow(
+    'Invalid parent session',
+  )
+  await expect(prepareStart({ ...start, cwd: process.cwd() }, empty)).resolves.toBeDefined()
+})
+
 test('unavailable history of a nonempty parent never silently becomes an empty chat', async () => {
   await expect(prepareStart(options, async () => [])).rejects.toThrow('not saved yet')
   await expect(

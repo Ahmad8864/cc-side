@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import { getSessionMessages, type SessionMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { StartOptions } from '../shared/protocol.ts'
 
@@ -25,7 +26,7 @@ export async function prepareStart(
   options: StartOptions,
   readHistory = getSessionMessages,
 ): Promise<StartOptions> {
-  if (!/^[0-9a-f-]{36}$/i.test(options.parentSessionId) || !options.cwd.startsWith('/'))
+  if (!/^[0-9a-f-]{36}$/i.test(options.parentSessionId) || !isAbsolute(options.cwd))
     throw new Error('Invalid parent session')
   const history = await readHistory(options.parentSessionId, {
     dir: options.cwd,
