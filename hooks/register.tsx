@@ -520,7 +520,8 @@ export const register: Register = (on) => {
     return next(e)
   })
   on('session.end', async ($, e, next) => {
-    await close()
+    // /clear ends the session but keeps its panes, and no session.start follows.
+    if (opened) await host.closePane()
     await writes
     return next(e)
   })

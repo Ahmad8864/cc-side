@@ -271,6 +271,17 @@ test('native X, /close, and /side close all discard the side helper', async () =
   expect(h.requests.filter((r) => r.path === '/close')).toHaveLength(3)
 })
 
+test('/clear in the main chat closes the side pane, and a later /side starts fresh', async () => {
+  const h = await harness()
+  await h.command()
+  await h.invoke('session.end', { reason: 'clear' })
+  expect(h.hidden()).toBe(true)
+  expect(h.requests.filter((r) => r.path === '/close')).toHaveLength(1)
+  await h.command()
+  expect(h.starts()).toBe(2)
+  expect(h.hidden()).toBe(false)
+})
+
 for (const status of ['working', 'permission'] as const) {
   test(`/side preserves a rejected question while ${status} without sending or replacing the side draft`, async () => {
     const h = await harness(status)
