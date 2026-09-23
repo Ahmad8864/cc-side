@@ -9,7 +9,17 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 if [ -z "${CC_SIDE_CLAUDE:-}" ]; then
-  for candidate in /opt/homebrew/bin/claude /usr/local/bin/claude; do
+  # Claude runs this launcher, so its parent is the main session's executable.
+  main=$(ps -o comm= -p "$PPID" 2>/dev/null || true)
+  case "$main" in
+    /*) ;;
+    *) main=$(command -v "$main" || true) ;;
+  esac
+  case "${main##*/}" in
+    claude*) ;;
+    *) main= ;;
+  esac
+  for candidate in "$main" /opt/homebrew/bin/claude /usr/local/bin/claude; do
     if [ -x "$candidate" ]; then
       CC_SIDE_CLAUDE=$candidate
       break
