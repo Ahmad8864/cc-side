@@ -137,15 +137,14 @@ async function harness(
     await Promise.resolve()
     return result
   }
-  const render = async (columns = 180, bodyColumns = 78) =>
-    nodes(
-      await invoke('ui.render', {
-        requestId: 'side',
-        surface: 'terminal',
-        viewport: { columns: columns - bodyColumns - 1, rows: 48, isFullscreen: true },
-        props: { placement: 'dock', bodyColumns, scroll: { bodyRows: 40 } },
-      }),
-    )
+  const tree = (columns = 180, bodyColumns = 78) =>
+    invoke('ui.render', {
+      requestId: 'side',
+      surface: 'terminal',
+      viewport: { columns: columns - bodyColumns - 1, rows: 48, isFullscreen: true },
+      props: { placement: 'dock', bodyColumns, scroll: { bodyRows: 40 } },
+    })
+  const render = async (columns = 180, bodyColumns = 78) => nodes(await tree(columns, bodyColumns))
   const editor = async () => (await render()).find((n) => n.tag === 'Client')!
   const submit = async (instance: string, seq: number, text: string) => {
     const client = await editor(),
@@ -159,6 +158,7 @@ async function harness(
   return {
     invoke,
     command,
+    tree,
     render,
     editor,
     submit,
@@ -461,6 +461,35 @@ test('tool details expand and collapse without replacing the composer or losing 
   expect(after.props.key).toBe(editor.props.key)
   expect(after.props.props.seed).toBe('Keep this draft')
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
+})
+
+test('long messages, approvals, and histories stay within the pane drawing limits', async () => {
+  const messages: ChatState['messages'] = [
+    ...Array.from({ length: 30 }, (_, i) => ({
+      id: `old-${i}`,
+      role: 'assistant' as const,
+      text: `Reply ${i} `.repeat(800),
+    })),
+    { id: 'question', role: 'user', text: 'word '.repeat(4000) },
+    { id: 'answer', role: 'assistant', text: 'Latest answer\n' + 'a'.repeat(30000) },
+  ]
+  const h = await harness(
+    'permission',
+    [{ id: 'write', tool: 'Write', input: { file_path: 'a.txt', content: 'x'.repeat(20000) } }],
+    undefined,
+    messages,
+  )
+  await h.command()
+  const tree = await h.tree()
+  const strings = nodes(tree).flatMap((n) =>
+    [...n.children, n.props.text].filter((c) => typeof c === 'string'),
+  )
+  expect(JSON.stringify(tree).length).toBeLessThan(100000)
+  expect(Math.max(...strings.map((s) => s.length))).toBeLessThanOrEqual(10000)
+  expect(JSON.stringify(tree)).toContain('Latest answer')
+  expect(JSON.stringify(tree)).toContain('earlier messages hidden')
+  expect(JSON.stringify(tree)).toContain('more characters')
+  expect(nodes(tree).some((n) => n.tag === 'Client')).toBe(true)
 })
 
 test('polling rides out brief bridge failures and reports a lasting disconnect', async () => {

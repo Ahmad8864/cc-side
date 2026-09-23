@@ -8,6 +8,7 @@ import type {
   Submission,
 } from '../shared/protocol.ts'
 import { localCommands, modelLabel } from '../shared/commands.ts'
+import { treeLimit } from '../shared/limits.ts'
 import type { ComposerProps } from './composer.tsx'
 import { renderMessages, renderPermissions } from './transcript.tsx'
 
@@ -354,6 +355,25 @@ export const register: Register = (on) => {
     const columns = e.props.bodyColumns - 2
     composerColumns = columns
     composerRows = e.props.scroll.bodyRows
+    const permissions = renderPermissions(elements, state.permissions, answers, {
+      invalidate: host.invalidate,
+      setError: (message) => {
+        localError = message
+        host.invalidate()
+      },
+      decide: (id, allow, answers) =>
+        action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
+    })
+    const composer = (
+      <Client
+        key={`side-composer-${generation}`}
+        module="./composer.tsx"
+        width={columns}
+        props={composerProps()}
+      />
+    )
+    // Messages get what the rest of the pane leaves of the drawing limit.
+    const budget = treeLimit - JSON.stringify([permissions, composer]).length - 5000
     return (
       <Box
         flexDirection="column"
@@ -385,19 +405,12 @@ export const register: Register = (on) => {
               })
             },
             state.cwd,
+            budget,
           )}
         </Box>
         {/* Keep the editor's ancestor/sibling positions stable. The terminal
           focus region can remount when conditional siblings appear. */}
-        {renderPermissions(elements, state.permissions, answers, {
-          invalidate: host.invalidate,
-          setError: (message) => {
-            localError = message
-            host.invalidate()
-          },
-          decide: (id, allow, answers) =>
-            action('/permission', { id, allow, ...(answers ? { answers } : {}) }),
-        })}
+        {permissions}
         <Box>
           {localError || state.error ? (
             <Text color="error">{localError || state.error}</Text>
@@ -420,12 +433,7 @@ export const register: Register = (on) => {
               />
             ) : null}
           </Box>
-          <Client
-            key={`side-composer-${generation}`}
-            module="./composer.tsx"
-            width={columns}
-            props={composerProps()}
-          />
+          {composer}
           <Box gap={2} justifyContent="flex-end">
             <Text dimColor>Esc main</Text>
             {busy ? (

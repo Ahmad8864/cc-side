@@ -1,10 +1,12 @@
-import type { Elements } from 'claude-code'
+import type { Elements, RenderElement } from 'claude-code'
 import type { ChatMessage, Permission } from '../shared/protocol.ts'
 import { cleanInput, layout } from '../shared/editor.ts'
+import { clip, splitText, treeLimit } from '../shared/limits.ts'
 import { questionsFor } from '../shared/questions.ts'
 import { toolDisplay } from '../shared/tool-display.ts'
 
 type Answers = Record<string, Record<string, string>>
+const messageLimit = 40000
 
 function toolStatus(status: ChatMessage['status']): string {
   if (status === 'done') return '✓'
@@ -19,9 +21,10 @@ export function renderMessages(
   expanded: Set<string>,
   onToggle: (key: string) => void,
   cwd?: string,
+  budget = treeLimit,
 ) {
   const { Box, Text, Button, Markdown } = elements
-  return messages.map((message) => {
+  const draw = (message: ChatMessage) => {
     if (message.role === 'tool') {
       const details = toolDisplay(message, columns, cwd)
       const open = expanded.has(message.id)
@@ -70,30 +73,55 @@ export function renderMessages(
         </Box>
       )
     }
+    const text = clip(message.text, messageLimit)
     return (
       <Box key={message.id} flexDirection="column" marginBottom={1}>
         {message.role === 'user' ? (
           <Box>
             <Text color="claude">❯ </Text>
             <Box flexDirection="column" width={columns - 2}>
-              <Text wrap="wrap">
-                {layout(message.text, columns - 3)
+              {splitText(
+                layout(text, columns - 3)
                   .map((line) => line.glyphs.map((g) => g.text).join(''))
-                  .join('\n')}
-              </Text>
+                  .join('\n'),
+              ).map((part, index) => (
+                <Text key={`${message.id}-${index}`} wrap="wrap">
+                  {part}
+                </Text>
+              ))}
             </Box>
           </Box>
         ) : (
           <Box>
             <Text>⏺ </Text>
             <Box flexDirection="column" width={columns - 2}>
-              <Markdown text={message.text || '…'} />
+              {splitText(text || '…').map((part, index) => (
+                <Markdown key={`${message.id}-${index}`} text={part} />
+              ))}
             </Box>
           </Box>
         )}
       </Box>
     )
-  })
+  }
+  // Mods refuses an oversized pane as a whole, so draw the newest messages that fit.
+  const rows: RenderElement[] = []
+  let hidden = messages.length
+  let size = 0
+  while (hidden > 0) {
+    const row = draw(messages[hidden - 1])
+    size += JSON.stringify(row).length
+    if (size > budget) break
+    rows.unshift(row)
+    hidden--
+  }
+  if (!hidden) return rows
+  return [
+    <Text key="hidden-messages" dimColor>
+      {`${hidden} earlier ${hidden === 1 ? 'message' : 'messages'} hidden`}
+    </Text>,
+    ...rows,
+  ]
 }
 
 export function renderPermissions(
@@ -174,7 +202,7 @@ export function renderPermissions(
                 </Box>
               ))
             ) : (
-              <Text>{JSON.stringify(permission.input, null, 2)}</Text>
+              <Text>{clip(JSON.stringify(permission.input, null, 2), 6000)}</Text>
             )}
             <Box gap={2}>
               <Button
