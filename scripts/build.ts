@@ -22,7 +22,7 @@ await rm(dist, { recursive: true, force: true })
 await mkdir(join(plugin, '.claude-plugin'), { recursive: true })
 await mkdir(join(plugin, 'bin'), { recursive: true })
 await cp(join(root, '.claude-plugin/plugin.json'), join(plugin, '.claude-plugin/plugin.json'))
-for (const path of ['hooks', 'shared', 'licenses', 'README.md', 'LICENSE', 'docs']) {
+for (const path of ['hooks', 'shared', 'licenses', 'README.md', 'LICENSE']) {
   await cp(join(root, path), join(plugin, path), { recursive: true })
 }
 await cp(join(root, 'bin/cc-side'), join(plugin, 'bin/cc-side'))
