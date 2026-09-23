@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Conversation } from './conversation.ts'
+import { endProcessTree } from './platform.ts'
 import { prepareStart } from './prepare.ts'
 import { errorMessage } from '../shared/errors.ts'
 
@@ -60,17 +61,10 @@ async function main() {
   function shutdown() {
     if (closing) return
     closing = true
-    conversation.close()
-    server.stop(true)
-    // This daemon is the leader of its own process group. Bound cleanup even if
-    // a tool ignores normal SDK cancellation; never signal the parent group.
-    setTimeout(() => {
-      try {
-        process.kill(-process.pid, 'SIGKILL')
-      } catch {
-        process.exit(0)
-      }
-    }, 1000)
+    endProcessTree(() => {
+      conversation.close()
+      server.stop(true)
+    })
   }
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)

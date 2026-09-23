@@ -15,6 +15,7 @@ export async function startHelper(serverArguments: string[]) {
   if (!options.claudePath) fail('Claude Code was not found. Install it before using cc-side.')
   const child = spawn(process.execPath, serverArguments, {
     detached: true,
+    windowsHide: true,
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   child.stdin.end(JSON.stringify(options))
