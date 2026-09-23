@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { modelLabel } from '../shared/commands.ts'
+import { completions, modelLabel } from '../shared/commands.ts'
 import type { SideModel } from '../shared/protocol.ts'
 
 const levels = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -30,4 +30,11 @@ test('model labels name the model whether or not its description starts with the
   expect(modelLabel('claude-opus-5-5', models)).toBe('Opus 5.5')
   expect(modelLabel('haiku', models)).toBe('Haiku 4.5')
   expect(modelLabel('claude-sonnet-4-5[1m]', models)).toBe('sonnet 4 5 (1M context)')
+})
+
+test('/model completion ranks model names above description matches', () => {
+  const values = (text: string) => completions(text, [], models).map((c) => c.value)
+  expect(values('/model opus')[0]).toBe('/model opus')
+  expect(values('/model op')[0]).toBe('/model opus')
+  expect(values('/model ')).toEqual(['/model default', '/model opus', '/model haiku'])
 })

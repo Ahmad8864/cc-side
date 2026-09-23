@@ -40,6 +40,14 @@ export function modelLabel(model: string, models: SideModel[] = []) {
   )
 }
 
+// Names outrank descriptions, so Enter picks the model that was typed.
+function modelRank(model: SideModel, query: string) {
+  const names = [model.value, model.displayName].map((name) => name.toLowerCase())
+  if (names.includes(query)) return 0
+  if (names.some((name) => name.startsWith(query))) return 1
+  return names.some((name) => name.includes(query)) ? 2 : 3
+}
+
 export type Completion = { value: string; label: string; description: string; execute?: boolean }
 export function completions(
   text: string,
@@ -54,6 +62,7 @@ export function completions(
     if (match[1].toLowerCase() === 'model')
       return models
         .filter((m) => `${m.value} ${m.displayName} ${m.description}`.toLowerCase().includes(query))
+        .sort((a, b) => modelRank(a, query) - modelRank(b, query))
         .map((m) => ({
           value: `/model ${m.value}`,
           label: m.displayName,
