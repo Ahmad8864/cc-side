@@ -44,7 +44,9 @@ function harness(overrides: Partial<StartOptions> = {}) {
               resolvedModel: 'claude-sonnet-5',
               displayName: 'Sonnet',
               description: 'Sonnet 5 · Fast',
+              supportedEffortLevels: ['low', 'medium', 'high'],
             },
+            { value: 'haiku', displayName: 'Haiku 4.5', description: 'Fastest for quick answers' },
           ],
         }
       },
@@ -465,6 +467,17 @@ test('model and effort controls update only this process; unknown commands never
   await expect(h.chat.submit('/not-a-command')).rejects.toThrow('Unknown side command')
   expect(h.chat.state.messages).toHaveLength(0)
   expect(h.chat.state.requests).toHaveLength(0)
+  h.chat.close()
+})
+
+test('effort accepts only the levels the current model supports', async () => {
+  const h = harness()
+  await h.chat.submit('/model sonnet')
+  await expect(h.chat.submit('/effort max')).rejects.toThrow('Choose low, medium, high, or auto.')
+  await h.chat.submit('/model haiku')
+  await expect(h.chat.submit('/effort low')).rejects.toThrow('Choose auto.')
+  await h.chat.submit('/effort auto')
+  expect(h.settings()).toEqual({ effortLevel: null })
   h.chat.close()
 })
 

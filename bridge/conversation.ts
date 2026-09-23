@@ -8,7 +8,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
-import { commandCatalog, modelLabel, parseCommand } from '../shared/commands.ts'
+import { commandCatalog, modelLabel, parseCommand, supportedEfforts } from '../shared/commands.ts'
 import { toolOutput } from './tool-output.ts'
 
 export class Conversation {
@@ -199,9 +199,10 @@ export class Conversation {
         this.state.notice = undefined
         this.changed()
       } else if (command.name === 'effort') {
+        const levels = [...supportedEfforts(this.state.model ?? '', this.state.models), 'auto']
+        const choices = new Intl.ListFormat('en', { type: 'disjunction' }).format(levels)
         if (command.args) {
-          if (!['low', 'medium', 'high', 'xhigh', 'max', 'auto'].includes(command.args))
-            throw new Error('Choose low, medium, high, xhigh, max, or auto.')
+          if (!levels.includes(command.args)) throw new Error(`Choose ${choices}.`)
           await this.agent.applyFlagSettings({
             effortLevel:
               command.args === 'auto'
@@ -212,9 +213,7 @@ export class Conversation {
           this.state.notice = undefined
           this.changed()
         } else
-          this.local(
-            `Effort: ${this.state.effort ?? 'model default'}. Use /effort low, medium, high, xhigh, max, or auto.`,
-          )
+          this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort ${choices}.`)
       } else if (command.name === 'help') {
         this.local(
           '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\n' +

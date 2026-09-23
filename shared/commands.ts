@@ -27,8 +27,11 @@ export function parseCommand(text: string) {
   return match ? { name: match[1].toLowerCase(), args: (match[2] ?? '').trim() } : undefined
 }
 
+const findModel = (model: string, models: SideModel[]) =>
+  models.find((m) => m.value === model || m.resolvedModel === model)
+
 export function modelLabel(model: string, models: SideModel[] = []) {
-  const entry = models.find((m) => m.value === model || m.resolvedModel === model)
+  const entry = findModel(model, models)
   // Some catalogs name the version before " · " in the description, others in displayName.
   const [version, summary] = entry?.description.split(' · ') ?? []
   return (
@@ -38,6 +41,12 @@ export function modelLabel(model: string, models: SideModel[] = []) {
       .replace(/\[1m\]/, ' (1M context)')
       .replace(/-/g, ' ')
   )
+}
+
+/** A listed model without effort levels ignores effort; an unlisted one may accept any. */
+export function supportedEfforts(model: string, models: SideModel[] = []): string[] {
+  const entry = findModel(model, models)
+  return entry ? (entry.supportedEffortLevels ?? []) : ['low', 'medium', 'high', 'xhigh', 'max']
 }
 
 // Names outrank descriptions, so Enter picks the model that was typed.
@@ -69,9 +78,7 @@ export function completions(
           description: m.description,
           execute: true,
         }))
-    const levels = models.find((m) => m.value === model || m.resolvedModel === model)
-      ?.supportedEffortLevels ?? ['low', 'medium', 'high', 'xhigh', 'max']
-    return [...levels, 'auto']
+    return [...supportedEfforts(model ?? '', models), 'auto']
       .filter((level) => level.startsWith(query))
       .map((level) => ({
         value: `/effort ${level}`,

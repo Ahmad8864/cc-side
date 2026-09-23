@@ -190,25 +190,25 @@ async function harness(
   }
 }
 
-test('side header displays selected effort alongside the model', async () => {
+test('side header displays selected effort for models that support it', async () => {
   const models = [
     {
       value: 'sonnet',
       resolvedModel: 'claude-sonnet-5',
       displayName: 'Sonnet',
       description: 'Sonnet 5 · latest',
+      supportedEffortLevels: ['low', 'medium', 'high'],
     },
+    { value: 'haiku', displayName: 'Haiku 4.5', description: 'Fastest for quick answers' },
   ]
-  for (const effort of ['high', 'auto']) {
-    const h = await harness('ready', [], undefined, [], {
-      model: 'claude-sonnet-5',
-      effort,
-      models,
-    })
+  const header = async (model: string, effort: string) => {
+    const h = await harness('ready', [], undefined, [], { model, effort, models })
     await h.command()
-    const labels = (await h.render()).filter((node) => node.tag === 'Text')
-    expect(labels.some((node) => node.children.includes(`Sonnet 5 (${effort})`))).toBe(true)
+    return (await h.render()).filter((node) => node.tag === 'Text').flatMap((node) => node.children)
   }
+  for (const effort of ['high', 'auto'])
+    expect(await header('claude-sonnet-5', effort)).toContain(`Sonnet 5 (${effort})`)
+  expect(await header('haiku', 'low')).toContain('Haiku 4.5')
 })
 
 test('Close button discards the conversation and draft before reopening a fresh helper', async () => {

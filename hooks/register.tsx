@@ -7,7 +7,7 @@ import type {
   StartupResult,
   Submission,
 } from '../shared/protocol.ts'
-import { localCommands, modelLabel } from '../shared/commands.ts'
+import { localCommands, modelLabel, supportedEfforts } from '../shared/commands.ts'
 import { treeLimit } from '../shared/limits.ts'
 import type { ComposerProps } from './composer.tsx'
 import { renderMessages, renderPermissions } from './transcript.tsx'
@@ -355,6 +355,10 @@ export const register: Register = (on) => {
     const columns = e.props.bodyColumns - 2
     composerColumns = columns
     composerRows = e.props.scroll.bodyRows
+    const effort =
+      state.model && state.effort && supportedEfforts(state.model, state.models).length
+        ? ` (${state.effort})`
+        : ''
     const permissions = renderPermissions(elements, state.permissions, answers, {
       invalidate: host.invalidate,
       setError: (message) => {
@@ -385,9 +389,7 @@ export const register: Register = (on) => {
           <Text bold>Side chat</Text>
           <Box flexShrink={1}>
             <Text dimColor wrap="truncate-end">
-              {state.model
-                ? `${modelLabel(state.model, state.models)}${state.effort ? ` (${state.effort})` : ''}`
-                : ''}
+              {state.model ? `${modelLabel(state.model, state.models)}${effort}` : ''}
             </Text>
           </Box>
         </Box>

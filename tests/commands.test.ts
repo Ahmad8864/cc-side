@@ -38,3 +38,10 @@ test('/model completion ranks model names above description matches', () => {
   expect(values('/model op')[0]).toBe('/model opus')
   expect(values('/model ')).toEqual(['/model default', '/model opus', '/model haiku'])
 })
+
+test('/effort completion offers only the levels the selected model supports', () => {
+  const levels = (model: string) => completions('/effort ', [], models, model).map((c) => c.label)
+  expect(levels('claude-opus-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'auto'])
+  expect(levels('claude-haiku-4-5-20251001')).toEqual(['auto'])
+  expect(levels('claude-custom-model')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'auto'])
+})
