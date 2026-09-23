@@ -14,7 +14,7 @@ import { commandCatalog, parseCommand } from '../shared/commands.ts'
 import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { toolOutput } from './tool-output.ts'
 import { editStarts } from './edit-starts.ts'
-import sessionEnv from '../shared/session-env.json'
+import { sdkOptions } from './sdk-options.ts'
 import { earlierDiscussion, editingNote, editingOff, sideInstruction } from './instructions.ts'
 
 // Claude's own file-changing tools, which a read-only side chat refuses.
@@ -63,40 +63,9 @@ export class Conversation {
         },
       ]
     }
-    const env: Record<string, string | undefined> = {
-      ...process.env,
-      CC_SIDE_WORKER: '1',
-      CLAUDE_CODE_SKIP_PROMPT_HISTORY: '1',
-    }
-    // The side is a session of its own: drop what ties a process to the main one.
-    for (const name of [...sessionEnv, 'CC_SIDE_TRACE']) delete env[name]
-    const configuredMode = options.securitySettings?.permissions?.defaultMode
     this.agent = createQuery({
       prompt: this.input,
-      options: {
-        pathToClaudeCodeExecutable: process.env.CC_SIDE_CLAUDE ?? '/opt/homebrew/bin/claude',
-        cwd: options.cwd,
-        ...(options.resumeSessionAt
-          ? {
-              resume: options.parentSessionId,
-              resumeSessionAt: options.resumeSessionAt,
-              forkSession: true,
-            }
-          : {}),
-        persistSession: false,
-        includePartialMessages: true,
-        model: options.model,
-        ...(options.effort ? { effort: options.effort } : {}),
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
-        settingSources: options.settingSources ?? ['user', 'project', 'local'],
-        settings: options.securitySettings,
-        ...(options.securitySettings?.sandbox?.enabled
-          ? { sandbox: { ...options.securitySettings.sandbox, failIfUnavailable: true } }
-          : {}),
-        permissionMode:
-          configuredMode === 'plan' || configuredMode === 'dontAsk' ? configuredMode : 'default',
-        ...(options.isolatedTest ? { strictMcpConfig: true, mcpServers: {} } : {}),
-        env,
+      options: sdkOptions(options, {
         canUseTool: (tool, input, context) => this.requestPermission(tool, input, context),
         hooks: { PreToolUse: [{ hooks: [async (input) => this.guardEdits(input)] }] },
         stderr: (text) => {
@@ -106,7 +75,7 @@ export class Conversation {
             this.changed()
           }
         },
-      },
+      }),
     })
     this.initializing = this.initialize()
     void this.consume()
