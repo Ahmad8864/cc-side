@@ -73,7 +73,7 @@ export const register: Register = (on) => {
     const json = JSON.stringify({ events }, null, 2)
     writes = writes.then(() => host.write(tracePath!, json)).catch(() => {})
   }
-  const poll = async (epoch: number) => {
+  const poll = async (epoch: number, failures = 0) => {
     if (epoch !== generation || !endpoint) return
     try {
       const result: ChatState = await host.request(endpoint, '/state')
@@ -89,6 +89,13 @@ export const register: Register = (on) => {
       }
     } catch (error) {
       if (epoch !== generation) return
+      // A busy or waking machine can miss a request; a stopped helper misses them all.
+      if (failures < 4) {
+        host.after(1000, () => {
+          void poll(epoch, failures + 1)
+        })
+        return
+      }
       localError = `Side process disconnected. Close and reopen /side. ${String(error)}`
       host.invalidate()
       return

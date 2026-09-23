@@ -30,7 +30,8 @@ async function harness(
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
   let starts = 0,
     hidden = false,
-    failSend = false
+    failSend = false,
+    failedPolls = 0
   const requests: { path: string; body: any; url: string }[] = []
   const opens: any[] = []
   const launches: string[][] = []
@@ -79,6 +80,10 @@ async function harness(
         const path = url.slice(url.lastIndexOf('/'))
         const body = init.body ? JSON.parse(init.body) : undefined
         requests.push({ path, body, url })
+        if (path === '/state' && failedPolls) {
+          failedPolls--
+          throw new Error('Connection refused')
+        }
         if (path === '/send') {
           if (failSend) {
             failSend = false
@@ -175,6 +180,9 @@ async function harness(
     hidden: () => hidden,
     failNext: () => {
       failSend = true
+    },
+    failPolls: (count: number) => {
+      failedPolls = count
     },
     failStart: (stdout: string) => {
       startup = stdout
@@ -442,6 +450,23 @@ test('tool details expand and collapse without replacing the composer or losing 
   expect(after.props.key).toBe(editor.props.key)
   expect(after.props.props.seed).toBe('Keep this draft')
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
+})
+
+test('polling rides out brief bridge failures and reports a lasting disconnect', async () => {
+  const h = await harness()
+  await h.command()
+  const tick = async () => {
+    await Bun.sleep(0)
+    for (const timer of h.timers.splice(0)) timer()
+    await Bun.sleep(0)
+  }
+  await tick()
+  h.failPolls(4)
+  for (let i = 0; i < 5; i++) await tick()
+  expect(JSON.stringify(await h.render())).not.toContain('disconnected')
+  h.failPolls(5)
+  for (let i = 0; i < 5; i++) await tick()
+  expect(JSON.stringify(await h.render())).toContain('disconnected')
 })
 
 test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {

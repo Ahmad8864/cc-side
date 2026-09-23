@@ -7,7 +7,7 @@ async function main() {
   const options = await prepareStart(JSON.parse(await Bun.stdin.text()))
   const token = crypto.randomUUID() + crypto.randomUUID()
   const conversation = (activeConversation = new Conversation(options))
-  let touched = Date.now()
+  let idleChecks = 0
   let closing = false
 
   const server = Bun.serve({
@@ -21,7 +21,7 @@ async function main() {
       // This endpoint is a local process capability, never a website API.
       if (request.headers.has('origin'))
         return new Response('Browser requests are not accepted', { status: 403 })
-      touched = Date.now()
+      idleChecks = 0
       const path = new URL(request.url).pathname
       try {
         if (path === '/state' && request.method === 'GET') return Response.json(conversation.state)
@@ -73,8 +73,9 @@ async function main() {
   }
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)
+  // Count missed checks, not elapsed time: a machine waking from sleep is not idle.
   setInterval(() => {
-    if (Date.now() - touched > 30000) shutdown()
+    if (++idleChecks > 6) shutdown()
     if (options.ownerPid) {
       try {
         process.kill(options.ownerPid, 0)
