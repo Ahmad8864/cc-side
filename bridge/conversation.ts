@@ -472,6 +472,38 @@ export class Conversation {
     }
   }
 
+  private acceptResult(message: Extract<SDKMessage, { type: 'result' }>) {
+    this.state.usage = message.usage
+    this.state.activity = null
+    this.state.status = message.is_error && !this.stopping ? 'error' : 'ready'
+    if (this.stopping) {
+      this.state.notice = 'Stopped'
+      this.state.error = undefined
+      for (const block of this.blocks.values())
+        if (block.status === 'running') {
+          block.status = 'cancelled'
+          block.text = 'Stopped by you.'
+        }
+      this.stopping = false
+    } else if (message.subtype !== 'success')
+      this.state.error = message.errors?.join('\n') ?? 'The side turn ended without a reply'
+    else if (message.is_error) this.state.error = message.result || 'The side turn failed'
+  }
+
+  // /clear starts the side over, so Claude needs its purpose again.
+  private reset(sessionId: string) {
+    this.state.sessionId = sessionId
+    this.state.messages = []
+    this.blocks.clear()
+    this.state.requests = []
+    this.requestIndexes.clear()
+    this.state.context = 'empty'
+    this.state.notice = undefined
+    this.state.activity = null
+    this.needsSideInstruction = true
+    this.earlier = ''
+  }
+
   accept(message: SDKMessage) {
     if (this.closed) return
     if (message.type === 'system' && message.subtype === 'init') {
@@ -485,16 +517,7 @@ export class Conversation {
     } else if (message.type === 'system' && message.subtype === 'local_command_output') {
       this.local(message.content)
     } else if (message.type === 'conversation_reset') {
-      this.state.sessionId = message.new_conversation_id
-      this.state.messages = []
-      this.blocks.clear()
-      this.state.requests = []
-      this.requestIndexes.clear()
-      this.state.context = 'empty'
-      this.state.notice = undefined
-      this.state.activity = null
-      this.needsSideInstruction = true
-      this.earlier = ''
+      this.reset(message.new_conversation_id)
     } else if (message.type === 'system' && message.subtype === 'status') {
       if (message.status === 'compacting') this.activity('compacting')
       if (message.status === 'requesting') this.activity('requesting')
@@ -505,28 +528,10 @@ export class Conversation {
       if (tool.status === 'running') tool.elapsedSeconds = message.elapsed_time_seconds
     } else if (message.type === 'assistant' && !message.parent_tool_use_id) {
       this.acceptAssistant(message)
-    } else if (
-      message.type === 'user' &&
-      !message.parent_tool_use_id &&
-      Array.isArray(message.message.content)
-    ) {
+    } else if (message.type === 'user' && !message.parent_tool_use_id) {
       this.acceptToolResults(message)
     } else if (message.type === 'result') {
-      this.state.usage = message.usage
-      this.state.activity = null
-      this.state.status = message.is_error && !this.stopping ? 'error' : 'ready'
-      if (this.stopping) {
-        this.state.notice = 'Stopped'
-        this.state.error = undefined
-        for (const block of this.blocks.values())
-          if (block.status === 'running') {
-            block.status = 'cancelled'
-            block.text = 'Stopped by you.'
-          }
-        this.stopping = false
-      } else if (message.subtype !== 'success')
-        this.state.error = message.errors?.join('\n') ?? 'The side turn ended without a reply'
-      else if (message.is_error) this.state.error = message.result || 'The side turn failed'
+      this.acceptResult(message)
     }
     this.changed()
   }
