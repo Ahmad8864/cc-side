@@ -7,6 +7,7 @@ export const helperTargets: Target[] = [
   { os: 'darwin', arch: 'x64' },
   { os: 'linux', arch: 'x64', baseline: true },
   { os: 'linux', arch: 'arm64' },
+  { os: 'windows', arch: 'x64', baseline: true },
 ]
 
 export const bunTarget = ({ os, arch, baseline }: Target) =>

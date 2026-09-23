@@ -682,16 +682,19 @@ test('each computer launches its packaged helper; Bun is an explicit development
   expect(await launches({ uname: 'Linux aarch64' })).toEqual([
     ['/plugin/helpers/cc-side-linux-arm64'],
   ])
+  expect(await launches({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'AMD64' } })).toEqual([
+    ['/plugin/helpers/cc-side-windows-x64.exe'],
+  ])
   expect(await launches({ env: { CC_SIDE_BUN: '/dev/bun' } })).toEqual([
     ['/dev/bun', '/plugin/bridge/main.ts'],
   ])
 })
 
 test('a computer without a packaged helper is told so', async () => {
-  const h = await harness({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'AMD64' } })
+  const h = await harness({ uname: 'FreeBSD amd64' })
   await h.command()
   expect(h.launches).toEqual([])
-  expect(JSON.stringify(await h.render())).toContain('cc-side does not support windows on x64 yet.')
+  expect(JSON.stringify(await h.render())).toContain('cc-side does not support freebsd on x64 yet.')
 })
 
 test('a new side chat starts at the effort of the last main turn', async () => {
