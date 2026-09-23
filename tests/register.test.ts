@@ -24,6 +24,7 @@ async function harness(
   permissions: ChatState['permissions'] = [],
   developmentBun?: string,
   messages: ChatState['messages'] = [],
+  selection: Pick<ChatState, 'model' | 'effort' | 'models'> = {},
 ) {
   const handlers = new Map<string, (...args: any[]) => any>()
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
@@ -59,6 +60,7 @@ async function harness(
           revision: 1,
           status: initialStatus,
           model: 'sonnet',
+          ...selection,
           messages: structuredClone(messages),
           permissions,
           requests: [],
@@ -174,6 +176,27 @@ async function harness(
     },
   }
 }
+
+test('side header displays selected effort alongside the model', async () => {
+  const models = [
+    {
+      value: 'sonnet',
+      resolvedModel: 'claude-sonnet-5',
+      displayName: 'Sonnet',
+      description: 'Sonnet 5 · latest',
+    },
+  ]
+  for (const effort of ['high', 'auto']) {
+    const h = await harness('ready', [], undefined, [], {
+      model: 'claude-sonnet-5',
+      effort,
+      models,
+    })
+    await h.command()
+    const labels = (await h.render()).filter((node) => node.tag === 'Text')
+    expect(labels.some((node) => node.children.includes(`Sonnet 5 (${effort})`))).toBe(true)
+  }
+})
 
 test('Close button discards the conversation and draft before reopening a fresh helper', async () => {
   const h = await harness()

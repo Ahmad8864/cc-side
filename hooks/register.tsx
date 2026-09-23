@@ -358,7 +358,9 @@ export const register: Register = (on) => {
           <Text bold>Side chat</Text>
           <Box flexShrink={1}>
             <Text dimColor wrap="truncate-end">
-              {state.model ? modelLabel(state.model, state.models) : ''}
+              {state.model
+                ? `${modelLabel(state.model, state.models)}${state.effort ? ` (${state.effort})` : ''}`
+                : ''}
             </Text>
           </Box>
         </Box>
