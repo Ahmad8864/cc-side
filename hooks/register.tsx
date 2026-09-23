@@ -94,7 +94,7 @@ export const register: Register = (on) => {
       focus: true,
       columns: paneColumns(viewportColumns),
     })
-    if (!chat.connected) await chat.connect()
+    await chat.connect()
     const reason = arg ? await chat.ask(arg) : undefined
     if (!reason) return {}
     // Put the rejected command back where it was entered. Never replace

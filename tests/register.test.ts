@@ -199,7 +199,7 @@ async function harness({
     failPolls: (count: number) => {
       failedPolls = count
     },
-    failStart: (stdout: string) => {
+    failStart: (stdout?: string) => {
       startup = stdout
     },
   }
@@ -641,6 +641,18 @@ test('a failed refresh keeps the current side chat and its hint', async () => {
   expect(tree).toContain('not saved yet')
   expect(tree).toContain('main is 1 reply ahead')
   expect(h.requests.some((r) => r.path === '/close')).toBe(false)
+})
+
+test('a stale Retry pressed after the side chat connects keeps that connection', async () => {
+  const h = await harness()
+  h.failStart(JSON.stringify({ error: 'Not ready yet.' }))
+  await h.command()
+  const retry = (await h.render()).find((n) => n.props.key === 'retry-side')!
+  h.failStart()
+  await h.command()
+  expect(h.starts()).toBe(2)
+  await retry.props.onPress()
+  expect(h.starts()).toBe(2)
 })
 
 test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {

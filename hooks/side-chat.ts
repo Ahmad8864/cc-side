@@ -239,7 +239,7 @@ export class SideChat {
   }
 
   async connect() {
-    if (!this.opened || this.connecting) return
+    if (!this.opened || this.connecting || this.endpoint) return
     this.connecting = true
     this.mainAhead = 0
     this.state = empty()
