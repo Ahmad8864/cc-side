@@ -268,6 +268,7 @@ export class Conversation {
     this.input.push({
       type: 'user',
       message: { role: 'user', content },
+      origin: { kind: 'human' },
       parent_tool_use_id: null,
       session_id: this.state.sessionId ?? '',
     })

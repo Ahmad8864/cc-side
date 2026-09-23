@@ -441,6 +441,17 @@ test('first slash command reaches the dispatcher unchanged, then normal text get
   h.chat.close()
 })
 
+test('typed messages and commands are marked as human input', async () => {
+  const h = harness(),
+    input = h.input[Symbol.asyncIterator]()
+  await h.chat.submit('/compact')
+  expect((await input.next()).value.origin).toEqual({ kind: 'human' })
+  h.chat.accept(event({ type: 'result', subtype: 'success', is_error: false, usage: {} }))
+  h.chat.send('Question')
+  expect((await input.next()).value.origin).toEqual({ kind: 'human' })
+  h.chat.close()
+})
+
 test('model and effort controls update only this process; unknown commands never become model requests', async () => {
   const h = harness()
   await h.chat.submit('/model sonnet')
