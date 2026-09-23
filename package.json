@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "./scripts/dev.sh",
+    "dev": "bun scripts/dev.ts",
     "test": "bun test",
     "typecheck": "tsc -p .",
     "types:check": "bun scripts/check-mod-types.ts",
-    "validate": "./scripts/claude.sh plugin validate .claude-plugin/plugin.json",
+    "validate": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate .claude-plugin/plugin.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "bun run format:check && bun run types:check && bun run typecheck && bun test",

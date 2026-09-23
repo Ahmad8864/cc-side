@@ -8,7 +8,7 @@ Bun is needed only for development and building releases.
 ```sh
 bun install --frozen-lockfile
 bun run check       # formatting, types, tests; no Claude account required
-bun run validate    # Homebrew Claude's mod loader checks
+bun run validate    # Claude's mod loader checks
 bun run format      # apply formatting
 bun run dev         # run the source plugin
 ```

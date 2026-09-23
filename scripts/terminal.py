@@ -15,7 +15,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CLAUDE = os.environ.get('CC_SIDE_CLAUDE', str(ROOT / 'scripts/claude.sh'))
+CLAUDE = os.environ.get('CC_SIDE_CLAUDE') or shutil.which('claude') or 'claude'
 PLUGIN = Path(os.environ.get('CC_SIDE_PLUGIN_DIR', ROOT)).resolve()
 
 
