@@ -3,15 +3,22 @@ import { register } from '../hooks/register.tsx'
 import type { ChatState } from '../shared/protocol.ts'
 import { nodes } from './tree.ts'
 
+type Setup = Partial<
+  Pick<ChatState, 'status' | 'permissions' | 'messages' | 'model' | 'effort' | 'models'>
+> & {
+  // A development Bun, which runs the helper from source.
+  bun?: string
+}
+
 // Exercise the real pane hooks, including Button callbacks. The host can hide
 // a pane without echoing ui.close back to the caller; hiding is not disposal.
-async function harness(
-  initialStatus: ChatState['status'] = 'ready',
-  permissions: ChatState['permissions'] = [],
-  developmentBun?: string,
-  messages: ChatState['messages'] = [],
-  selection: Pick<ChatState, 'model' | 'effort' | 'models'> = {},
-) {
+async function harness({
+  status = 'ready',
+  permissions = [],
+  messages = [],
+  bun,
+  ...selection
+}: Setup = {}) {
   const handlers = new Map<string, (...args: any[]) => any>()
   register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
   let starts = 0,
@@ -32,7 +39,7 @@ async function harness(
   let settings: Record<string, unknown> = {}
   const stored: Record<string, unknown> = {}
   const $ = {
-    env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? developmentBun : undefined) },
+    env: { get: async (key: string) => (key === 'CC_SIDE_BUN' ? bun : undefined) },
     session: {
       id: async () => 'parent',
       cwd: async () => '/project',
@@ -49,7 +56,7 @@ async function harness(
         if (startup !== undefined) return { exitCode: 1, stdout: startup }
         state = {
           revision: 1,
-          status: initialStatus,
+          status,
           model: 'sonnet',
           canEdit: launchOptions.at(-1).canEdit ?? false,
           ...selection,
@@ -210,7 +217,7 @@ test('side header displays selected effort for models that support it', async ()
     { value: 'haiku', displayName: 'Haiku 4.5', description: 'Fastest for quick answers' },
   ]
   const header = async (model: string, effort: string) => {
-    const h = await harness('ready', [], undefined, [], { model, effort, models })
+    const h = await harness({ model, effort, models })
     await h.command()
     return (await h.render()).filter((node) => node.tag === 'Text').flatMap((node) => node.children)
   }
@@ -291,7 +298,7 @@ test('/clear in the main chat closes the side pane, and a later /side starts fre
 
 for (const status of ['working', 'permission'] as const) {
   test(`/side preserves a rejected question while ${status} without sending or replacing the side draft`, async () => {
-    const h = await harness(status)
+    const h = await harness({ status })
     await h.command()
     const before = await h.editor()
     await h.invoke('ui.message', {
@@ -313,7 +320,7 @@ for (const status of ['working', 'permission'] as const) {
 }
 
 test('a rejected command preserves newer main-prompt text and displays the unsent question', async () => {
-  const h = await harness('working')
+  const h = await harness({ status: 'working' })
   await h.command()
   h.setPrompt('New main draft')
   const result = await h.command('Unsent question')
@@ -348,15 +355,18 @@ test('terminal resize updates the existing pane once, without focus or conversat
 })
 
 test('question controls require an answer, preserve the editor, and send the chosen answers', async () => {
-  const h = await harness('permission', [
-    {
-      id: 'question',
-      tool: 'AskUserQuestion',
-      input: {
-        questions: [{ question: 'Which color?', options: [{ label: 'Cyan' }] }],
+  const h = await harness({
+    status: 'permission',
+    permissions: [
+      {
+        id: 'question',
+        tool: 'AskUserQuestion',
+        input: {
+          questions: [{ question: 'Which color?', options: [{ label: 'Cyan' }] }],
+        },
       },
-    },
-  ])
+    ],
+  })
   await h.command()
   const before = await h.editor()
   let tree = await h.render()
@@ -375,15 +385,20 @@ test('question controls require an answer, preserve the editor, and send the cho
 })
 
 test('questions mark picked options, send on Enter once answered, and can be skipped', async () => {
-  const h = await harness('permission', [
-    {
-      id: 'q',
-      tool: 'AskUserQuestion',
-      input: {
-        questions: [{ question: 'Which color?', options: [{ label: 'Cyan' }, { label: 'Teal' }] }],
+  const h = await harness({
+    status: 'permission',
+    permissions: [
+      {
+        id: 'q',
+        tool: 'AskUserQuestion',
+        input: {
+          questions: [
+            { question: 'Which color?', options: [{ label: 'Cyan' }, { label: 'Teal' }] },
+          ],
+        },
       },
-    },
-  ])
+    ],
+  })
   await h.command()
   const control = async (key: string) => (await h.render()).find((n) => n.props.key === key)!
   expect((await control('deny-q')).props.label).toBe('Skip')
@@ -400,9 +415,10 @@ test('questions mark picked options, send on Enter once answered, and can be ski
 
 test('tool permission controls send the explicit allow or deny decision', async () => {
   for (const allow of [true, false]) {
-    const h = await harness('permission', [
-      { id: 'tool', tool: 'Write', input: { file_path: 'test.txt' } },
-    ])
+    const h = await harness({
+      status: 'permission',
+      permissions: [{ id: 'tool', tool: 'Write', input: { file_path: 'test.txt' } }],
+    })
     await h.command()
     const tree = await h.render()
     await tree.find((n) => n.props.key === `${allow ? 'allow' : 'deny'}-tool`)!.props.onPress()
@@ -411,19 +427,22 @@ test('tool permission controls send the explicit allow or deny decision', async 
 })
 
 test('sensitive approvals show Claude warnings and focus Deny without approval shortcuts', async () => {
-  const h = await harness('permission', [
-    {
-      id: 'sensitive',
-      tool: 'mcp__files__read',
-      input: { path: '/outside/private.txt' },
-      title: 'Claude wants to read a private file',
-      description: 'This grants access outside the project.',
-      decisionReason: 'The path is outside the allowed directories.',
-      blockedPath: '/outside/private.txt',
-      mcpServer: { name: 'files\u001b', source: 'project' },
-      defaultToNo: true,
-    },
-  ])
+  const h = await harness({
+    status: 'permission',
+    permissions: [
+      {
+        id: 'sensitive',
+        tool: 'mcp__files__read',
+        input: { path: '/outside/private.txt' },
+        title: 'Claude wants to read a private file',
+        description: 'This grants access outside the project.',
+        decisionReason: 'The path is outside the allowed directories.',
+        blockedPath: '/outside/private.txt',
+        mcpServer: { name: 'files\u001b', source: 'project' },
+        defaultToNo: true,
+      },
+    ],
+  })
   await h.command()
   const tree = await h.render()
   for (const warning of [
@@ -453,17 +472,19 @@ test('sensitive approvals show Claude warnings and focus Deny without approval s
 })
 
 test('tool details expand and collapse without replacing the composer or losing its draft', async () => {
-  const h = await harness('ready', [], undefined, [
-    {
-      id: 'call',
-      role: 'tool',
-      toolName: 'mcp__jobs__run',
-      toolInput: JSON.stringify({ id: 'job_42', settings: { enabled: false } }),
-      text: 'Request started\nRequest failed\nInvalid job ID: job_42',
-      status: 'error',
-      outputTruncated: true,
-    },
-  ])
+  const h = await harness({
+    messages: [
+      {
+        id: 'call',
+        role: 'tool',
+        toolName: 'mcp__jobs__run',
+        toolInput: JSON.stringify({ id: 'job_42', settings: { enabled: false } }),
+        text: 'Request started\nRequest failed\nInvalid job ID: job_42',
+        status: 'error',
+        outputTruncated: true,
+      },
+    ],
+  })
   await h.command()
   const editor = await h.editor()
   await h.invoke('ui.message', {
@@ -504,12 +525,13 @@ test('long messages, approvals, and histories stay within the pane drawing limit
     { id: 'question', role: 'user', text: 'word '.repeat(4000) },
     { id: 'answer', role: 'assistant', text: 'Latest answer\n' + 'a'.repeat(30000) },
   ]
-  const h = await harness(
-    'permission',
-    [{ id: 'write', tool: 'Write', input: { file_path: 'a.txt', content: 'x'.repeat(20000) } }],
-    undefined,
+  const h = await harness({
+    status: 'permission',
+    permissions: [
+      { id: 'write', tool: 'Write', input: { file_path: 'a.txt', content: 'x'.repeat(20000) } },
+    ],
     messages,
-  )
+  })
   await h.command()
   const tree = await h.tree()
   const strings = nodes(tree).flatMap((n) =>
@@ -541,10 +563,12 @@ test('polling rides out brief bridge failures and reports a lasting disconnect',
 })
 
 test('/insert and /copy share the last reply without buttons under every reply', async () => {
-  const h = await harness('ready', [], undefined, [
-    { id: 'q', role: 'user', text: 'What should run first?' },
-    { id: 'a', role: 'assistant', text: 'Run the migration first.' },
-  ])
+  const h = await harness({
+    messages: [
+      { id: 'q', role: 'user', text: 'What should run first?' },
+      { id: 'a', role: 'assistant', text: 'Run the migration first.' },
+    ],
+  })
   await h.command()
   expect((await h.render()).filter((n) => n.tag === 'Button').map((n) => n.props.key)).toEqual([
     'edit-side',
@@ -562,10 +586,7 @@ test('main replies since the fork show a quiet hint, and /refresh re-forks in pl
     { id: 'q', role: 'user', text: 'Why?' },
     { id: 'a', role: 'assistant', text: 'Because.' },
   ]
-  const h = await harness('ready', [], undefined, messages, {
-    model: 'claude-sonnet-5',
-    effort: 'low',
-  })
+  const h = await harness({ messages, model: 'claude-sonnet-5', effort: 'low' })
   await h.command()
   await h.invoke('turn.complete', { agentId: 'worker' })
   expect(JSON.stringify(await h.render())).not.toContain('ahead')
@@ -588,7 +609,7 @@ test('main replies since the fork show a quiet hint, and /refresh re-forks in pl
 })
 
 test('the refresh hint waits for the current reply instead of dropping it', async () => {
-  const h = await harness('working')
+  const h = await harness({ status: 'working' })
   await h.command()
   await h.invoke('turn.complete', {})
   await (await h.render()).find((n) => n.props.key === 'refresh-side')!.props.onPress()
@@ -624,7 +645,7 @@ test('installed plugins launch the packaged helper; Bun is an explicit developme
   const installed = await harness()
   await installed.command()
   expect(installed.launches).toEqual([['/plugin/bin/cc-side']])
-  const development = await harness('ready', [], '/dev/bun')
+  const development = await harness({ bun: '/dev/bun' })
   await development.command()
   expect(development.launches).toEqual([['/dev/bun', '/plugin/bridge/main.ts']])
 })
