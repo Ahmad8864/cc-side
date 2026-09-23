@@ -4,7 +4,7 @@ import { layout } from '../shared/editor.ts'
 import { clip, splitText, treeLimit } from '../shared/limits.ts'
 import { toolDisplay } from '../shared/tool-display.ts'
 
-export type MessageView = {
+type MessageView = {
   columns: number
   expanded: Set<string>
   onToggle: (key: string) => void

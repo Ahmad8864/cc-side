@@ -1,9 +1,9 @@
 // Pure text operations shared by the drawing-thread composer and its tests.
 // UTF-16 offsets match strings; navigation and wrapping use grapheme/cell bounds.
-export type Glyph = { text: string; start: number; end: number; width: number }
-export type Line = { start: number; end: number; glyphs: Glyph[]; width: number }
+type Glyph = { text: string; start: number; end: number; width: number }
+type Line = { start: number; end: number; glyphs: Glyph[]; width: number }
 export type Editor = { text: string; cursor: number; preferredColumn?: number }
-export type Key = { key: string; ctrl?: boolean; shift?: boolean; meta?: boolean }
+type Key = { key: string; ctrl?: boolean; shift?: boolean; meta?: boolean }
 
 export function normalizeKey(key: Key): Key {
   // Client reports physical Space by name, including enhanced terminal keys.

@@ -16,7 +16,7 @@ export type BridgePath = '/state' | '/send' | '/permission' | '/edit' | '/stop' 
 export type StartChoices = Partial<Pick<StartOptions, 'model' | 'effort' | 'canEdit' | 'carried'>>
 
 /** What the side chat needs from Claude. The hook module provides it, since only it may use `$`. */
-export type Host = {
+type Host = {
   options: (choices: StartChoices) => Promise<StartOptions>
   start: (options: StartOptions) => Promise<Endpoint>
   request: (endpoint: Endpoint, path: BridgePath, body?: unknown) => Promise<ChatState>

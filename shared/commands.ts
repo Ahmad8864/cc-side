@@ -56,7 +56,7 @@ function modelRank(model: SideModel, query: string) {
 
 export type Completion = { value: string; label: string; description: string; execute?: boolean }
 /** The side chat's current choices, which pickers list and mark. */
-export type SideSettings = {
+type SideSettings = {
   models: SideModel[]
   model?: string
   effort?: string

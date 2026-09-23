@@ -6,7 +6,7 @@ import { inputDetails } from './tool-display.ts'
 // Room for one approval's code, well inside a drawn string's limit.
 const codeLimit = 6000
 
-export type ApprovalPart =
+type ApprovalPart =
   | { kind: 'file'; path: string }
   | { kind: 'code'; source: string; format?: 'diff'; path?: string; language?: string }
   | { kind: 'text'; text: string }

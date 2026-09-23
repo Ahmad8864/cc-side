@@ -1,5 +1,11 @@
 import type { EngineInterface, Register } from 'claude-code'
-import type { ChatState, Endpoint, StartOptions, StartupResult } from '../shared/protocol.ts'
+import type {
+  ChatState,
+  Endpoint,
+  SecuritySettings,
+  StartOptions,
+  StartupResult,
+} from '../shared/protocol.ts'
 import { effortLevels } from '../shared/models.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
@@ -194,7 +200,7 @@ function createBridgeClient($: EngineInterface, helper: string[]) {
         model: await $.session.model(),
         ...choices,
         allowEmptyParent: (await $.session.messages()).length === 0,
-        securitySettings: { permissions, sandbox } as StartOptions['securitySettings'],
+        securitySettings: { permissions, sandbox } as SecuritySettings,
         ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),
       }
     },

@@ -1,5 +1,5 @@
 // Mods refuses a whole drawing when one string or its serialized tree is larger.
-export const stringLimit = 10000
+const stringLimit = 10000
 export const treeLimit = 100000
 
 const fence = /^ {0,3}(`{3,}|~{3,})/
