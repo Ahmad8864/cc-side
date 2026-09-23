@@ -408,8 +408,9 @@ export class Conversation {
       if (block.type !== 'tool_result') continue
       const tool = this.blocks.get(block.tool_use_id)
       if (!tool) continue
-      const output = toolOutput(this.stopping ? 'Stopped by you.' : block.content)
-      tool.status = this.stopping ? 'cancelled' : block.is_error ? 'error' : 'done'
+      const stopped = this.stopping && block.is_error
+      const output = toolOutput(stopped ? 'Stopped by you.' : block.content)
+      tool.status = stopped ? 'cancelled' : block.is_error ? 'error' : 'done'
       tool.text = output.text
       tool.outputTruncated = output.truncated
     }

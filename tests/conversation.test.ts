@@ -378,6 +378,41 @@ test('an intentional stop is shown as stopped, and a follow-up clears the notice
   chat.close()
 })
 
+test('a tool that finishes while stopping keeps its actual result', async () => {
+  const { chat } = harness()
+  chat.send('Do some work')
+  chat.accept(
+    event({
+      type: 'assistant',
+      message: {
+        id: 'm',
+        usage: {},
+        content: [
+          { type: 'tool_use', id: 'write', name: 'Write', input: {} },
+          { type: 'tool_use', id: 'test', name: 'Bash', input: {} },
+        ],
+      },
+    }),
+  )
+  await chat.stop()
+  chat.accept(
+    event({
+      type: 'user',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'write', content: 'File written' },
+          { type: 'tool_result', tool_use_id: 'test', is_error: true, content: 'Interrupted' },
+        ],
+      },
+    }),
+  )
+  expect(chat.state.messages.filter((m) => m.role === 'tool')).toMatchObject([
+    { status: 'done', text: 'File written' },
+    { status: 'cancelled', text: 'Stopped by you.' },
+  ])
+  chat.close()
+})
+
 test('an API error that ends a turn shows its message', () => {
   const { chat } = harness()
   chat.send('Question')
