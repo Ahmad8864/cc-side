@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { accessSync, constants } from 'node:fs'
+import { accessSync, constants, readlinkSync } from 'node:fs'
 import { delimiter, isAbsolute, join } from 'node:path'
 
 type Env = Record<string, string | undefined>
@@ -12,6 +12,7 @@ const executables: Partial<Record<NodeJS.Platform, (pid: number, env: Env) => st
       const name = output('ps', ['-o', 'comm=', '-p', String(pid)])
       return name && (isAbsolute(name) ? name : onPath(name, env))
     },
+    linux: (pid) => readlinkSync(`/proc/${pid}/exe`),
   }
 
 /**
@@ -24,21 +25,28 @@ export function findClaude(parent: number, env: Env = process.env): string | und
 
 function executableOf(pid: number, env: Env) {
   try {
-    return executables[process.platform]?.(pid, env)
+    const file = executables[process.platform]?.(pid, env)
+    // An update may have removed the file a running Claude started from.
+    return file && isExecutable(file) ? file : undefined
   } catch {
     return undefined
   }
 }
 
 function onPath(name: string, env: Env) {
-  for (const directory of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    const file = join(directory, name)
-    try {
-      accessSync(file, constants.X_OK)
-      return file
-    } catch {
-      /* Not here; try the next directory. */
-    }
+  return (env.PATH ?? '')
+    .split(delimiter)
+    .filter(Boolean)
+    .map((directory) => join(directory, name))
+    .find(isExecutable)
+}
+
+function isExecutable(file: string) {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
   }
 }
 
