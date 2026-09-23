@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const main = fileURLToPath(new URL('../bridge/main.ts', import.meta.url).href)
+// A release check sets CC_SIDE_HELPER to test a compiled helper instead of the source.
+const helper = process.env.CC_SIDE_HELPER
+  ? [process.env.CC_SIDE_HELPER]
+  : [process.execPath, fileURLToPath(new URL('../bridge/main.ts', import.meta.url).href)]
 
 // Stands in for the side's Claude: it starts a tool of its own and reports both processes.
 const fakeClaude = `
@@ -43,7 +46,7 @@ test('closing a side chat ends its helper, its Claude, and their tools', async (
       model: 'haiku',
       settingSources: [],
     }
-    const helper = Bun.spawn([process.execPath, main], {
+    const start = Bun.spawn(helper, {
       cwd: directory,
       env: {
         ...process.env,
@@ -53,7 +56,7 @@ test('closing a side chat ends its helper, its Claude, and their tools', async (
       stdin: new Blob([JSON.stringify(options)]),
       stdout: 'pipe',
     })
-    const { url, token, pid } = JSON.parse(await new Response(helper.stdout).text())
+    const { url, token, pid } = JSON.parse(await new Response(start.stdout).text())
     started.push(pid)
     await until(() => Bun.file(pids).exists())
     started.push(...JSON.parse(await readFile(pids, 'utf8')))

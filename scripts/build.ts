@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import manifest from '../.claude-plugin/plugin.json'
 import { version } from '../package.json'
-import { helperFile, helperTargets } from '../shared/targets.ts'
+import { bunTarget, helperFile, helperTargets } from '../shared/targets.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url).href)
 const dist = join(root, 'dist')
@@ -35,7 +35,7 @@ for (const target of helperTargets) {
     process.execPath,
     'build',
     '--compile',
-    `--target=bun-${target.os}-${target.arch}`,
+    `--target=${bunTarget(target)}`,
     '--define',
     'CC_SIDE_COMPILED=true',
     '--outfile',

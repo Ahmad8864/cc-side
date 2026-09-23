@@ -8,8 +8,8 @@ https://github.com/user-attachments/assets/3d79f8cc-e0b9-488d-becf-f2fd809dee71
 
 ## Install
 
-Requires macOS and Claude Code. The release includes standalone helpers for Apple
-Silicon and Intel; users do not need Bun, Node.js, or an npm install.
+Requires Claude Code on macOS or Linux (glibc), arm64 or x64. The release includes a
+standalone helper for each; users do not need Bun, Node.js, or an npm install.
 
 ```sh
 claude plugin marketplace add Ahmad8864/cc-side
@@ -67,8 +67,8 @@ its automatic sizing.
   approval rules, so an allowed command that writes files can run.
 - Permission and sandbox settings are copied when the pane opens. Session-only
   rules, CLI tool restrictions, and live mode changes are not reliably inherited.
-- This is a macOS prototype. Long histories, attachments, every Claude command,
-  and other terminals/platforms have not been exhaustively tested.
+- This is a prototype, used mostly on macOS. Long histories, attachments, every
+  Claude command, and other terminals have not been exhaustively tested.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the code layout and tests.
 

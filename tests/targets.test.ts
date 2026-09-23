@@ -10,7 +10,7 @@ test('computers are named as Bun names its compile targets', () => {
 })
 
 test('a computer runs its own helper, and only a shipped one', () => {
-  expect(helperFor({ os: 'darwin', arch: 'x64' })).toEqual({ os: 'darwin', arch: 'x64' })
+  expect(helperFor({ os: 'linux', arch: 'x64' })).toMatchObject({ os: 'linux', arch: 'x64' })
   expect(helperFor({ os: 'freebsd', arch: 'x64' })).toBeUndefined()
   expect(helperFile({ os: 'darwin', arch: 'arm64' })).toBe('cc-side-darwin-arm64')
   expect(helperFile({ os: 'windows', arch: 'x64' })).toBe('cc-side-windows-x64.exe')

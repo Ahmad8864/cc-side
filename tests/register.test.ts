@@ -679,6 +679,9 @@ test('each computer launches its packaged helper; Bun is an explicit development
   expect(await launches({ uname: 'Darwin x86_64' })).toEqual([
     ['/plugin/helpers/cc-side-darwin-x64'],
   ])
+  expect(await launches({ uname: 'Linux aarch64' })).toEqual([
+    ['/plugin/helpers/cc-side-linux-arm64'],
+  ])
   expect(await launches({ env: { CC_SIDE_BUN: '/dev/bun' } })).toEqual([
     ['/dev/bun', '/plugin/bridge/main.ts'],
   ])
