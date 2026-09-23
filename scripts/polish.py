@@ -38,6 +38,14 @@ def events():
     return json.loads((CASE / 'trace.json').read_text())['events']
 
 
+def started():
+    # The mod traces session.start once /side is registered.
+    try:
+        return any(e['kind'] == 'session.start' for e in events())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return False
+
+
 def state():
     return next((e['data'] for e in reversed(events()) if e['kind'] == 'side.state'), {})
 
@@ -84,6 +92,7 @@ def closes():
 
 
 def main():
+    wait(started, 60)
     if 'Side chat' not in side():
         open_side()
     wait(lambda: state().get('status') == 'ready')
