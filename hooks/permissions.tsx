@@ -1,6 +1,6 @@
 import type { Elements } from 'claude-code'
 import type { Permission } from '../shared/protocol.ts'
-import { cleanInput } from '../shared/editor.ts'
+import { cleanText } from '../shared/editor.ts'
 import { approvalParts } from '../shared/approval.ts'
 import { questionsFor, type Question } from '../shared/questions.ts'
 
@@ -38,24 +38,20 @@ export function renderPermissions(
         return (
           <Box key={permission.id} flexDirection="column" borderStyle="round" paddingX={1}>
             <Text bold color="warning">
-              {cleanInput(
+              {cleanText(
                 permission.title ??
                   (permission.tool === 'AskUserQuestion'
                     ? 'Claude has a question'
                     : `Allow ${permission.tool}?`),
               )}
             </Text>
-            {permission.description ? <Text>{cleanInput(permission.description)}</Text> : null}
-            {permission.decisionReason ? (
-              <Text>{cleanInput(permission.decisionReason)}</Text>
-            ) : null}
-            {permission.blockedPath ? (
-              <Text>Path: {cleanInput(permission.blockedPath)}</Text>
-            ) : null}
+            {permission.description ? <Text>{cleanText(permission.description)}</Text> : null}
+            {permission.decisionReason ? <Text>{cleanText(permission.decisionReason)}</Text> : null}
+            {permission.blockedPath ? <Text>Path: {cleanText(permission.blockedPath)}</Text> : null}
             {permission.mcpServer ? (
               <Text dimColor>
-                MCP: {cleanInput(permission.mcpServer.name)} (
-                {cleanInput(permission.mcpServer.source)})
+                MCP: {cleanText(permission.mcpServer.name)} (
+                {cleanText(permission.mcpServer.source)})
               </Text>
             ) : null}
             {questions.length ? (

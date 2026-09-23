@@ -109,7 +109,8 @@ export function offsetAt(line: Line, column: number) {
   }
   return line.end
 }
-export function cleanInput(text: string) {
+/** Text safe to draw: newlines normalized, tabs as spaces, other control characters removed. */
+export function cleanText(text: string) {
   return text
     .replace(/\r\n?/g, '\n')
     .replace(/\t/g, '  ')
@@ -171,7 +172,7 @@ export function edit(state: Editor, key: Key, columns: number): Editor {
     ].includes(key.key) &&
     !/^f\d{1,2}$/.test(key.key)
   ) {
-    const value = cleanInput(key.key)
+    const value = cleanText(key.key)
     if (text.length + value.length <= 50000) return replace(cursor, cursor, value)
   }
   return state

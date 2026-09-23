@@ -1,10 +1,10 @@
-import { cleanInput, glyphs } from './editor.ts'
+import { cleanText, glyphs } from './editor.ts'
 import type { ChatMessage } from './protocol.ts'
 
 const detailLimit = 6000
 
 export function truncateLine(text: string, columns: number): string {
-  const chars = glyphs(cleanInput(text).replace(/\s+/g, ' ').trim())
+  const chars = glyphs(cleanText(text).replace(/\s+/g, ' ').trim())
   if (chars.reduce((width, glyph) => width + glyph.width, 0) <= columns)
     return chars.map((glyph) => glyph.text).join('')
   let result = '',
@@ -28,7 +28,7 @@ function parseInput(text: string | undefined): unknown {
 
 function compactValue(value: unknown, cwd?: string): string {
   if (typeof value === 'string') {
-    const text = cleanInput(value).trim()
+    const text = cleanText(value).trim()
     const lines = text.split('\n').length
     if (lines > 1) return `${lines} lines`
     return truncateLine(cwd && text.startsWith(cwd + '/') ? text.slice(cwd.length + 1) : text, 60)
@@ -67,7 +67,7 @@ export function inputDetails(input: unknown): string {
 export function toolDisplay(message: ChatMessage, columns: number, cwd?: string) {
   const input = parseInput(message.toolInput)
   const summary = inputSummary(input, cwd)
-  const name = cleanInput(message.toolName || 'Tool')
+  const name = cleanText(message.toolName || 'Tool')
   const elapsed =
     message.status !== 'running' || message.elapsedSeconds === undefined
       ? ''
@@ -75,7 +75,7 @@ export function toolDisplay(message: ChatMessage, columns: number, cwd?: string)
   const room = Math.max(1, columns - 4 - elapsed.length)
   const title = summary ? truncateLine(name, Math.max(8, Math.floor(room / 2))) : name
   const label = truncateLine(summary ? `${title} ${summary}` : title, room) + elapsed
-  const details = cleanInput(inputDetails(input))
+  const details = cleanText(inputDetails(input))
   const outputLines = message.text.split('\n').filter((line) => line.trim())
   const lineNumber = /^\s*\d+(?: {2,}|\t|→)/
   const numbered = outputLines.length > 1 && outputLines.every((line) => lineNumber.test(line))
