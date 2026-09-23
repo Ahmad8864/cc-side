@@ -8,7 +8,14 @@ import {
   type SDKUserMessage,
   type Query,
 } from '@anthropic-ai/claude-agent-sdk'
-import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../shared/protocol.ts'
+import type {
+  Activity,
+  ChatMessage,
+  ChatState,
+  EffortLevel,
+  StartOptions,
+  Usage,
+} from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, parseCommand } from '../shared/commands.ts'
 import { modelLabel, supportedEfforts } from '../shared/models.ts'
@@ -201,61 +208,72 @@ export class Conversation {
       throw new Error(`Unknown side command /${command.name}. Type / to see available commands.`)
     this.controlling = true
     try {
-      if (command.name === 'model' && command.args) {
-        const chosen = this.state.models?.find(
-          (m) =>
-            m.value === command.args ||
-            m.resolvedModel === command.args ||
-            m.displayName.toLowerCase() === command.args.toLowerCase(),
-        )
-        // Also accept provider model IDs, as the native CLI does.
-        await this.agent.setModel(chosen?.value ?? command.args)
-        this.state.model = chosen?.resolvedModel ?? command.args
-        this.state.notice = undefined
-        this.changed()
-      } else if (command.name === 'effort') {
-        const levels = [...supportedEfforts(this.state.model ?? '', this.state.models), 'auto']
-        const choices = new Intl.ListFormat('en', { type: 'disjunction' }).format(levels)
-        if (command.args) {
-          if (!levels.includes(command.args)) throw new Error(`Choose ${choices}.`)
-          await this.agent.applyFlagSettings({
-            effortLevel:
-              command.args === 'auto'
-                ? null
-                : (command.args as 'low' | 'medium' | 'high' | 'xhigh' | 'max'),
-          })
-          this.state.effort = command.args
-          this.state.notice = undefined
-          this.changed()
-        } else
-          this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort ${choices}.`)
-      } else if (command.name === 'edit') {
-        if (command.args === 'on' || command.args === 'off') this.setEditing(command.args === 'on')
-        else if (command.args) throw new Error('Choose on or off.')
-        else
-          this.local(
-            `File edits are ${this.state.canEdit ? 'on' : 'off'}. Use /edit on or /edit off; new side chats start the same way.`,
-          )
-      } else if (command.name === 'help') {
-        this.local(
-          '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\nSide chats start read-only. /edit on lets Claude change files, and new side chats keep your last choice.\n\n' +
-            this.state
-              .commands!.map((c) => `- **/${c.name}** ${c.argumentHint} — ${c.description}`)
-              .join('\n'),
-        )
-      } else if (command.name === 'model') {
-        this.local(
-          `**${modelLabel(this.state.model ?? '', this.state.models)}**\n\n` +
-            this.state.models!.map((m) => `- /model ${m.value} — ${m.description}`).join('\n'),
-        )
-      } else {
-        // Let Claude dispatch its own commands/skills, including their arguments.
-        // Never prepend prose to a slash command, even on the first side turn.
-        this.send(text, true)
-      }
+      if (command.name === 'model') await this.chooseModel(command.args)
+      else if (command.name === 'effort') await this.chooseEffort(command.args)
+      else if (command.name === 'edit') this.chooseEditing(command.args)
+      else if (command.name === 'help') this.showHelp()
+      // Let Claude dispatch its own commands/skills, including their arguments.
+      // Never prepend prose to a slash command, even on the first side turn.
+      else this.send(text, true)
     } finally {
       this.controlling = false
     }
+  }
+
+  private async chooseModel(name: string) {
+    const { models } = this.state
+    if (!name) {
+      this.local(
+        `**${modelLabel(this.state.model ?? '', models)}**\n\n` +
+          models!.map((m) => `- /model ${m.value} — ${m.description}`).join('\n'),
+      )
+      return
+    }
+    const chosen = models?.find(
+      (m) =>
+        m.value === name ||
+        m.resolvedModel === name ||
+        m.displayName.toLowerCase() === name.toLowerCase(),
+    )
+    // Also accept provider model IDs, as the native CLI does.
+    await this.agent.setModel(chosen?.value ?? name)
+    this.state.model = chosen?.resolvedModel ?? name
+    this.state.notice = undefined
+    this.changed()
+  }
+
+  private async chooseEffort(level: string) {
+    const levels = [...supportedEfforts(this.state.model ?? '', this.state.models), 'auto']
+    const choices = new Intl.ListFormat('en', { type: 'disjunction' }).format(levels)
+    if (!level) {
+      this.local(`Effort: ${this.state.effort ?? 'model default'}. Use /effort ${choices}.`)
+      return
+    }
+    if (!levels.includes(level)) throw new Error(`Choose ${choices}.`)
+    await this.agent.applyFlagSettings({
+      effortLevel: level === 'auto' ? null : (level as EffortLevel),
+    })
+    this.state.effort = level
+    this.state.notice = undefined
+    this.changed()
+  }
+
+  private chooseEditing(setting: string) {
+    if (setting === 'on' || setting === 'off') this.setEditing(setting === 'on')
+    else if (setting) throw new Error('Choose on or off.')
+    else
+      this.local(
+        `File edits are ${this.state.canEdit ? 'on' : 'off'}. Use /edit on or /edit off; new side chats start the same way.`,
+      )
+  }
+
+  private showHelp() {
+    this.local(
+      '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\nSide chats start read-only. /edit on lets Claude change files, and new side chats keep your last choice.\n\n' +
+        this.state
+          .commands!.map((c) => `- **/${c.name}** ${c.argumentHint} — ${c.description}`)
+          .join('\n'),
+    )
   }
 
   private local(text: string) {
