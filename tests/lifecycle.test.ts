@@ -47,7 +47,6 @@ test('closing a side chat ends its helper, its Claude, and their tools', async (
       settingSources: [],
     }
     const start = Bun.spawn(helper, {
-      cwd: directory,
       env: {
         ...process.env,
         CC_SIDE_CLAUDE: join(directory, 'claude.js'),
@@ -58,6 +57,7 @@ test('closing a side chat ends its helper, its Claude, and their tools', async (
     })
     const { url, token, pid } = JSON.parse(await new Response(start.stdout).text())
     started.push(pid)
+    expect(await start.exited).toBe(0)
     await until(() => Bun.file(pids).exists())
     started.push(...JSON.parse(await readFile(pids, 'utf8')))
     const headers = { Authorization: `Bearer ${token}` }
