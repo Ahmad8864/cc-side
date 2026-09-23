@@ -528,6 +528,18 @@ test('installed plugins launch the packaged helper; Bun is an explicit developme
   expect(development.launches).toEqual([['/dev/bun', '/plugin/bridge/main.ts']])
 })
 
+test('a new side chat starts at the effort of the last main turn', async () => {
+  const h = await harness()
+  await h.invoke('classic.Stop', { agent_id: 'worker', effort: { level: 'low' } })
+  await h.invoke('classic.Stop', { effort: { level: 'xhigh' } })
+  await h.command()
+  expect(h.launchOptions[0].effort).toBe('xhigh')
+  await h.command('close')
+  await h.invoke('classic.Stop', {})
+  await h.command()
+  expect(h.launchOptions[1]).not.toHaveProperty('effort')
+})
+
 test('startup forwards effective security settings without copying credentials or hooks', async () => {
   const h = await harness()
   const security = {

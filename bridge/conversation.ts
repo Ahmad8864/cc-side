@@ -40,7 +40,7 @@ export class Conversation {
     this.state.context = options.resumeSessionAt ? 'inherited' : 'empty'
     this.state.model = options.model
     this.state.cwd = options.cwd
-    if (options.isolatedTest) this.state.effort = 'low'
+    this.state.effort = options.effort ?? 'auto'
     const env: Record<string, string | undefined> = {
       ...process.env,
       CC_SIDE_WORKER: '1',
@@ -64,6 +64,7 @@ export class Conversation {
         persistSession: false,
         includePartialMessages: true,
         model: options.model,
+        ...(options.effort ? { effort: options.effort } : {}),
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         settingSources: options.settingSources ?? ['user', 'project', 'local'],
         settings: options.securitySettings,
@@ -72,9 +73,7 @@ export class Conversation {
           : {}),
         permissionMode:
           configuredMode === 'plan' || configuredMode === 'dontAsk' ? configuredMode : 'default',
-        ...(options.isolatedTest
-          ? { strictMcpConfig: true, mcpServers: {}, effort: 'low' as const }
-          : {}),
+        ...(options.isolatedTest ? { strictMcpConfig: true, mcpServers: {} } : {}),
         env,
         canUseTool: (tool, input, context) => this.requestPermission(tool, input, context),
         stderr: (text) => {

@@ -501,6 +501,17 @@ test('model and effort controls update only this process; unknown commands never
   h.chat.close()
 })
 
+test('the side starts at the main session effort, or auto when it is unknown', () => {
+  const inherited = harness({ effort: 'xhigh' })
+  expect(inherited.options.effort).toBe('xhigh')
+  expect(inherited.chat.state.effort).toBe('xhigh')
+  inherited.chat.close()
+  const fresh = harness()
+  expect(fresh.options.effort).toBeUndefined()
+  expect(fresh.chat.state.effort).toBe('auto')
+  fresh.chat.close()
+})
+
 test('effort accepts only the levels the current model supports', async () => {
   const h = harness()
   await h.chat.submit('/model sonnet')

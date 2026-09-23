@@ -1,4 +1,6 @@
-import type { Settings } from '@anthropic-ai/claude-agent-sdk'
+import type { EffortLevel, Settings } from '@anthropic-ai/claude-agent-sdk'
+
+export type { EffortLevel }
 
 export type SecuritySettings = Pick<Settings, 'permissions' | 'sandbox'>
 
@@ -74,6 +76,7 @@ export type StartOptions = {
   resumeSessionAt?: string
   cwd: string
   model: string
+  effort?: EffortLevel
   ownerPid?: number
   settingSources?: ('user' | 'project' | 'local')[]
   securitySettings?: SecuritySettings

@@ -1,4 +1,6 @@
-import type { SideCommand, SideModel } from './protocol.ts'
+import type { EffortLevel, SideCommand, SideModel } from './protocol.ts'
+
+export const effortLevels: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 export const localCommands: SideCommand[] = [
   { name: 'help', description: 'Show side chat commands and keyboard shortcuts', argumentHint: '' },
@@ -46,7 +48,7 @@ export function modelLabel(model: string, models: SideModel[] = []) {
 /** A listed model without effort levels ignores effort; an unlisted one may accept any. */
 export function supportedEfforts(model: string, models: SideModel[] = []): string[] {
   const entry = findModel(model, models)
-  return entry ? (entry.supportedEffortLevels ?? []) : ['low', 'medium', 'high', 'xhigh', 'max']
+  return entry ? (entry.supportedEffortLevels ?? []) : effortLevels
 }
 
 // Names outrank descriptions, so Enter picks the model that was typed.

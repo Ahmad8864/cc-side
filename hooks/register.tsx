@@ -1,13 +1,14 @@
 import type { EngineInterface, Register } from 'claude-code'
 import type {
   ChatState,
+  EffortLevel,
   Endpoint,
   Receipt,
   StartOptions,
   StartupResult,
   Submission,
 } from '../shared/protocol.ts'
-import { localCommands, modelLabel, supportedEfforts } from '../shared/commands.ts'
+import { effortLevels, localCommands, modelLabel, supportedEfforts } from '../shared/commands.ts'
 import { treeLimit } from '../shared/limits.ts'
 import type { ComposerProps } from './composer.tsx'
 import { renderMessages, renderPermissions } from './transcript.tsx'
@@ -55,6 +56,7 @@ export const register: Register = (on) => {
   let viewportColumns = 0
   const expanded = new Set<string>()
   let focusedPermission: string | undefined
+  let mainEffort: EffortLevel | undefined
   const composerProps = (): ComposerProps => ({
     epoch: generation,
     seed: draft,
@@ -178,7 +180,7 @@ export const register: Register = (on) => {
     pendingSubmissions.clear()
     host.invalidate()
     try {
-      const connection = await host.start(await host.options())
+      const connection = await host.start(await host.options(mainEffort))
       if (epoch !== generation) {
         await host.request(connection, '/close')
         return
@@ -516,6 +518,11 @@ export const register: Register = (on) => {
     // pane redraw to release the pending send after an error or remount.
     return { props: composerProps() }
   })
+  on('classic.Stop', async ($, e, next) => {
+    // A new side chat starts at the effort of the main thread's last turn.
+    if (!e.agent_id) mainEffort = effortLevels.find((level) => level === e.effort?.level)
+    return next(e)
+  })
   on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
     const result = await next(e)
     if (e.requestId === PANE && e.origin.kind === 'person' && !result.deny)
@@ -540,13 +547,14 @@ type BridgeClient = ReturnType<typeof createBridgeClient>
 
 function createBridgeClient($: EngineInterface, helper: string[]) {
   return {
-    async options(): Promise<StartOptions> {
+    async options(effort?: EffortLevel): Promise<StartOptions> {
       const isolatedTest = !!(await $.env.get('CC_SIDE_TEST'))
       const { permissions, sandbox } = await $.settings.read()
       return {
         parentSessionId: await $.session.id(),
         cwd: await $.session.cwd(),
         model: await $.session.model(),
+        ...(effort ? { effort } : {}),
         allowEmptyParent: (await $.session.messages()).length === 0,
         securitySettings: { permissions, sandbox } as StartOptions['securitySettings'],
         ...(isolatedTest ? { isolatedTest, settingSources: ['project', 'local'] } : {}),
