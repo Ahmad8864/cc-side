@@ -10,6 +10,7 @@ import type { Activity, ChatMessage, ChatState, StartOptions, Usage } from '../s
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, modelLabel, parseCommand, supportedEfforts } from '../shared/commands.ts'
 import { toolOutput } from './tool-output.ts'
+import sessionEnv from '../shared/session-env.json'
 
 export class Conversation {
   readonly state: ChatState = {
@@ -45,8 +46,8 @@ export class Conversation {
       CC_SIDE_WORKER: '1',
       CLAUDE_CODE_SKIP_PROMPT_HISTORY: '1',
     }
-    delete env.CLAUDECODE
-    delete env.CC_SIDE_TRACE
+    // The side is a session of its own: drop what ties a process to the main one.
+    for (const name of [...sessionEnv, 'CC_SIDE_TRACE']) delete env[name]
     const configuredMode = options.securitySettings?.permissions?.defaultMode
     this.agent = createQuery({
       prompt: this.input,

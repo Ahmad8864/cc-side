@@ -237,6 +237,28 @@ test('a Claude startup error is published as soon as it is written', () => {
   h.chat.close()
 })
 
+test('the side runs as its own session without the main session markers or inbox', () => {
+  const markers = {
+    CLAUDE_CODE_ENTRYPOINT: 'cli',
+    CLAUDE_CODE_CHILD_SESSION: '1',
+    CLAUDE_CODE_MESSAGING_SOCKET: '/tmp/main.sock',
+    CLAUDE_CODE_MESSAGING_TOKEN: 'main-token',
+  }
+  const inherited = { ...markers, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000' }
+  const previous = Object.keys(inherited).map((name) => [name, process.env[name]] as const)
+  Object.assign(process.env, inherited)
+  try {
+    const h = harness()
+    for (const name of Object.keys(markers)) expect(h.options.env).not.toHaveProperty(name)
+    expect(h.options.env?.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('64000')
+    h.chat.close()
+  } finally {
+    for (const [name, value] of previous)
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+  }
+})
+
 test('inherited sandbox restrictions fail closed when sandboxing is unavailable', () => {
   const securitySettings = {
     permissions: { deny: ['Read(.env)'], ask: ['Bash(*)'] },
