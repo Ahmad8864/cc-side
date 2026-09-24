@@ -1,6 +1,9 @@
+import { stripVTControlCharacters } from 'node:util'
 import { cleanText } from '../shared/editor.ts'
 
 const outputLimit = 6000
+// Title and link sequences, whose text stripVTControlCharacters leaves behind.
+const osc = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g
 
 function contentText(content: unknown): string {
   if (typeof content === 'string') return content
@@ -20,8 +23,7 @@ function contentText(content: unknown): string {
 }
 
 export function toolOutput(content: unknown) {
-  // Unlike Node's stripVTControlCharacters, this also removes a title sequence's text.
-  const text = cleanText(Bun.stripANSI(contentText(content)))
+  const text = cleanText(stripVTControlCharacters(contentText(content).replace(osc, '')))
   const truncated = text.length > outputLimit
   return {
     text: truncated
