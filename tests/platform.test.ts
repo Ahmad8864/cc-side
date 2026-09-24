@@ -6,11 +6,17 @@ import { findClaude } from '../bridge/platform.ts'
 
 // No process has this id, so only the fallbacks can answer.
 const missingPid = 2147483647
+// Room for a lookup through PowerShell, whose first start on Windows can take seconds.
+const lookupTimeout = 20000
 
-test('the side runs the executable of the Claude that started its helper', async () => {
-  const found = findClaude(process.pid, { PATH: dirname(process.execPath) })
-  expect(found && (await realpath(found))).toBe(await realpath(process.execPath))
-})
+test(
+  'the side runs the executable of the Claude that started its helper',
+  async () => {
+    const found = findClaude(process.pid, { PATH: dirname(process.execPath) })
+    expect(found && (await realpath(found))).toBe(await realpath(process.execPath))
+  },
+  lookupTimeout,
+)
 
 test.skipIf(process.platform === 'win32')(
   'a Claude executable removed by an update is not run',
@@ -32,15 +38,19 @@ test('CC_SIDE_CLAUDE overrides the Claude executable', () => {
   expect(findClaude(process.pid, { CC_SIDE_CLAUDE: '/custom/claude' })).toBe('/custom/claude')
 })
 
-test('without a running parent, Claude is found on PATH', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'cc-side path '))
-  try {
-    const claude = join(directory, process.platform === 'win32' ? 'claude.exe' : 'claude')
-    await writeFile(claude, '')
-    await chmod(claude, 0o755)
-    expect(findClaude(missingPid, { PATH: `/missing${delimiter}${directory}` })).toBe(claude)
-    expect(findClaude(missingPid, { PATH: '' })).toBeUndefined()
-  } finally {
-    await rm(directory, { recursive: true, force: true })
-  }
-})
+test(
+  'without a running parent, Claude is found on PATH',
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'cc-side path '))
+    try {
+      const claude = join(directory, process.platform === 'win32' ? 'claude.exe' : 'claude')
+      await writeFile(claude, '')
+      await chmod(claude, 0o755)
+      expect(findClaude(missingPid, { PATH: `/missing${delimiter}${directory}` })).toBe(claude)
+      expect(findClaude(missingPid, { PATH: '' })).toBeUndefined()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  },
+  lookupTimeout,
+)

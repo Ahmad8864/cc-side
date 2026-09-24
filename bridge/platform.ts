@@ -78,7 +78,8 @@ function isExecutable(file: string) {
 function output(command: string, args: string[]) {
   const { stdout } = spawnSync(command, args, {
     encoding: 'utf8',
-    timeout: 5000,
+    // PowerShell's first start on Windows can take several seconds.
+    timeout: 10000,
     windowsHide: true,
   })
   return stdout?.trim() || undefined
