@@ -26,7 +26,7 @@ bun run dev         # run the source plugin
 - `bridge/sdk-options.ts`: how the side's Claude runs: fork, environment, and security settings.
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
 - `bridge/platform.ts`: what differs by operating system: finding main's Claude and ending processes.
-- `shared/`: protocol types, commands, model labels, helper targets, and pure text/layout operations.
+- `shared/`: protocol types, commands, model labels, and pure text/layout operations.
 - `types/`: generated Mods declarations; see its upstream note before updating.
 
 The SDK runs the main session's Claude binary; it is not bundled with the plugin.
@@ -85,6 +85,6 @@ the catalog points to the release ZIP and its checksum.
 
 To exercise a release with the PTY harness, set `CC_SIDE_PLUGIN_DIR` to the
 absolute `dist/plugin` path and `CC_SIDE_CLAUDE` to the installed Claude executable.
-Set `CC_SIDE_TEST_PATH=/usr/bin:/bin:/usr/sbin:/sbin` to exclude Bun and Node from
-the test process's PATH. The archive format is documented in
+Set `CC_SIDE_TEST_PATH` to a PATH that holds only Node or only Bun to test the
+helper on each runtime. The archive format is documented in
 [Claude's marketplace guide](https://code.claude.com/docs/en/plugin-marketplaces#zip-archives).

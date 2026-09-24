@@ -7,7 +7,6 @@ import type {
   StartupResult,
 } from '../shared/protocol.ts'
 import { effortLevels } from '../shared/models.ts'
-import { helperFile, helperFor, targetOf } from '../shared/targets.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 
@@ -246,16 +245,19 @@ function createBridgeClient($: EngineInterface) {
   }
 }
 
-// The standalone helper for this computer, or Bun running the source in development.
+// The runtimes that run the helper, in the order tried, with the oldest major of each.
+const runtimes = { node: 18, bun: 1 }
+
+// The helper on the first runtime on PATH; CC_SIDE_BUN runs the source in development.
 async function helperCommand($: EngineInterface) {
   const bun = await $.env.get('CC_SIDE_BUN')
   if (bun) return [bun, `${$.plugin.root}/bridge/main.ts`]
-  const system = await $.env.get('OS')
-  const target =
-    system === 'Windows_NT'
-      ? targetOf(system, await $.env.get('PROCESSOR_ARCHITECTURE'))
-      : targetOf(...(await $.process.run(['uname', '-sm'])).stdout.trim().split(/\s+/))
-  const helper = helperFor(target)
-  if (!helper) throw new Error(`cc-side does not support ${target.os} on ${target.arch} yet.`)
-  return [`${$.plugin.root}/helpers/${helperFile(helper)}`]
+  for (const [runtime, oldest] of Object.entries(runtimes)) {
+    const version = await $.process.run([runtime, '--version']).then(
+      (result) => result.stdout,
+      () => '',
+    )
+    if (Number(/\d+/.exec(version)?.[0]) >= oldest) return [runtime, `${$.plugin.root}/helper.mjs`]
+  }
+  throw new Error('Node.js 18 or later, or Bun, was not found. Install one before using cc-side.')
 }

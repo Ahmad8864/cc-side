@@ -7,8 +7,8 @@ type Setup = Partial<
   Pick<ChatState, 'status' | 'permissions' | 'messages' | 'model' | 'effort' | 'models'>
 > & {
   env?: Record<string, string>
-  // What `uname -sm` prints on this computer.
-  uname?: string
+  // What each runtime on PATH prints for `--version`.
+  runtimes?: Record<string, string>
 }
 
 // Exercise the real pane hooks, including Button callbacks. The host can hide
@@ -18,7 +18,7 @@ async function harness({
   permissions = [],
   messages = [],
   env = {},
-  uname = 'Darwin arm64',
+  runtimes = { node: 'v22.12.0' },
   ...selection
 }: Setup = {}) {
   const handlers = new Map<string, (...args: any[]) => any>()
@@ -52,7 +52,10 @@ async function harness({
     settings: { read: async () => settings },
     process: {
       run: async (command: string[], options: { stdin: string }) => {
-        if (command[0] === 'uname') return { exitCode: 0, stdout: `${uname}\n` }
+        if (command[1] === '--version') {
+          if (!runtimes[command[0]]) throw new Error(`${command[0]} not found`)
+          return { exitCode: 0, stdout: `${runtimes[command[0]]}\n` }
+        }
         launches.push(command)
         launchOptions.push(JSON.parse(options.stdin))
         starts++
@@ -669,35 +672,32 @@ test('helper startup errors are shown, with a reinstall hint only for unreadable
   expect(JSON.stringify(await h.render())).toContain('Reinstall cc-side')
 })
 
-test('each computer launches its packaged helper; Bun is an explicit development override', async () => {
+test('the helper runs on Node, or on Bun without a recent Node; CC_SIDE_BUN runs the source', async () => {
   const launches = async (setup: Setup) => {
     const h = await harness(setup)
     await h.command()
     return h.launches
   }
-  expect(await launches({})).toEqual([['/plugin/helpers/cc-side-darwin-arm64']])
-  expect(await launches({ uname: 'Darwin x86_64' })).toEqual([
-    ['/plugin/helpers/cc-side-darwin-x64'],
+  expect(await launches({})).toEqual([['node', '/plugin/helper.mjs']])
+  expect(await launches({ runtimes: { node: 'v16.20.2', bun: '1.4.2' } })).toEqual([
+    ['bun', '/plugin/helper.mjs'],
   ])
-  expect(await launches({ uname: 'Linux aarch64' })).toEqual([
-    ['/plugin/helpers/cc-side-linux-arm64'],
-  ])
-  expect(await launches({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'AMD64' } })).toEqual([
-    ['/plugin/helpers/cc-side-windows-x64.exe'],
-  ])
-  expect(await launches({ env: { OS: 'Windows_NT', PROCESSOR_ARCHITECTURE: 'ARM64' } })).toEqual([
-    ['/plugin/helpers/cc-side-windows-arm64.exe'],
-  ])
+  expect(await launches({ runtimes: { bun: '1.4.2' } })).toEqual([['bun', '/plugin/helper.mjs']])
   expect(await launches({ env: { CC_SIDE_BUN: '/dev/bun' } })).toEqual([
     ['/dev/bun', '/plugin/bridge/main.ts'],
   ])
 })
 
-test('a computer without a packaged helper is told so', async () => {
-  const h = await harness({ uname: 'FreeBSD amd64' })
+test('without Node or Bun the side says what to install, and finds one installed later', async () => {
+  const runtimes: Record<string, string> = {}
+  const h = await harness({ runtimes })
   await h.command()
   expect(h.launches).toEqual([])
-  expect(JSON.stringify(await h.render())).toContain('cc-side does not support freebsd on x64 yet.')
+  const tree = await h.render()
+  expect(JSON.stringify(tree)).toContain('Node.js 18 or later, or Bun, was not found.')
+  runtimes.node = 'v24.0.0'
+  await tree.find((n) => n.props.key === 'retry-side')!.props.onPress()
+  expect(h.launches).toEqual([['node', '/plugin/helper.mjs']])
 })
 
 test('a new side chat starts at the effort of the last main turn', async () => {

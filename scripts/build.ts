@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import manifest from '../.claude-plugin/plugin.json'
 import { version } from '../package.json'
-import { bunTarget, helperFile, helperTargets } from '../shared/targets.ts'
+import { bundleHelper } from './bundle.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url).href)
 const dist = join(root, 'dist')
@@ -29,20 +29,7 @@ await cp(join(root, '.claude-plugin/plugin.json'), join(plugin, '.claude-plugin/
 for (const path of ['hooks', 'shared', 'licenses', 'README.md', 'LICENSE']) {
   await cp(join(root, path), join(plugin, path), { recursive: true })
 }
-
-for (const target of helperTargets) {
-  await run([
-    process.execPath,
-    'build',
-    '--compile',
-    `--target=${bunTarget(target)}`,
-    '--define',
-    'CC_SIDE_COMPILED=true',
-    '--outfile',
-    join(plugin, 'helpers', helperFile(target)),
-    'bridge/main.ts',
-  ])
-}
+await bundleHelper(plugin)
 
 const archive = `cc-side-${manifest.version}.zip`
 await run(['zip', '-qr', join(dist, archive), '.'], plugin)

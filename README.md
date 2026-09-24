@@ -8,9 +8,8 @@ https://github.com/user-attachments/assets/3d79f8cc-e0b9-488d-becf-f2fd809dee71
 
 ## Install
 
-Requires Claude Code on macOS, Linux (glibc), or Windows. The release includes
-standalone helpers for arm64 and x64; users do not need Bun, Node.js, or an npm
-install.
+Requires Claude Code and Node.js 18 or later (or Bun) on your PATH, on macOS,
+Linux, or Windows. The side chat's helper runs on whichever it finds first.
 
 ```sh
 claude plugin marketplace add Ahmad8864/cc-side
