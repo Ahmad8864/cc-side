@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { text } from 'node:stream/consumers'
 import type { StartupResult, StartOptions } from '../shared/protocol.ts'
 import { findClaude } from './platform.ts'
 
@@ -9,7 +10,7 @@ function fail(error: string): never {
 }
 
 export async function startHelper(serverArguments: string[]) {
-  const options: StartOptions = JSON.parse(await Bun.stdin.text())
+  const options: StartOptions = JSON.parse(await text(process.stdin))
   options.ownerPid = process.ppid
   options.claudePath = findClaude(process.ppid)
   if (!options.claudePath) fail('Claude Code was not found. Install it before using cc-side.')
