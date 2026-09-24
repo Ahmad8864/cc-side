@@ -19,5 +19,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      # The oldest Node.js the helper supports, for the lifecycle test's Node run.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 18
       - run: bun install --frozen-lockfile
       - run: bun run check

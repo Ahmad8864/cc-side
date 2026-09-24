@@ -76,11 +76,10 @@ plugin ZIP, SHA-256 checksum, and marketplace catalog. The ZIP contains no
 `package.json`, lockfile, or dependencies to install.
 
 Commit the change, then use `claude plugin tag --push` to create and push the
-`cc-side--v<version>` release tag. GitHub Actions builds a helper for each target
-in `shared/targets.ts` and runs each from the release ZIP on its own system, then
-publishes the ZIP and catalog and updates `.claude-plugin/marketplace.json` on
-`main`. Changes to the helpers, and manual runs of the workflow, build and verify
-without publishing. Users add `Ahmad8864/cc-side` through Claude's plugin manager;
+`cc-side--v<version>` release tag. GitHub Actions builds the ZIP, checks its
+helper on Node and Bun, then publishes the ZIP and catalog and updates
+`.claude-plugin/marketplace.json` on `main`. A manual run of the workflow builds
+and checks without publishing. Users add `Ahmad8864/cc-side` through Claude's plugin manager;
 the catalog points to the release ZIP and its checksum.
 
 To exercise a release with the PTY harness, set `CC_SIDE_PLUGIN_DIR` to the

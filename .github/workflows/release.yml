@@ -1,27 +1,9 @@
 name: Release
 
-# Changes to the helpers, and manual runs, build and verify without publishing.
 on:
   push:
     tags: ['cc-side--v*']
-    branches: [main]
-    paths:
-      - bridge/**
-      - shared/**
-      - scripts/build.ts
-      - package.json
-      - bun.lock
-      - tests/lifecycle.test.ts
-      - .github/workflows/release.yml
-  pull_request:
-    paths:
-      - bridge/**
-      - shared/**
-      - scripts/build.ts
-      - package.json
-      - bun.lock
-      - tests/lifecycle.test.ts
-      - .github/workflows/release.yml
+  # A manual run builds and checks the release without publishing.
   workflow_dispatch:
 
 permissions:
@@ -29,15 +11,22 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 18
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build
+      - name: Check the built helper on Node and Bun
+        run: bun test tests/lifecycle.test.ts
+        env:
+          CC_SIDE_HELPER: ${{ github.workspace }}/dist/plugin/helper.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: release
@@ -46,40 +35,8 @@ jobs:
             dist/marketplace.json
             dist/SHA256SUMS
 
-  # Each helper runs from the release archive on the system it was built for.
-  verify:
-    needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: macos-latest, helper: cc-side-darwin-arm64 }
-          - { runner: macos-15-intel, helper: cc-side-darwin-x64 }
-          - { runner: ubuntu-latest, helper: cc-side-linux-x64 }
-          - { runner: ubuntu-24.04-arm, helper: cc-side-linux-arm64 }
-          - { runner: windows-latest, helper: cc-side-windows-x64.exe }
-          - { runner: windows-11-arm, helper: cc-side-windows-arm64.exe }
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      CC_SIDE_HELPER: ${{ github.workspace }}/plugin/helpers/${{ matrix.helper }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - uses: actions/download-artifact@v8
-        with:
-          name: release
-          path: dist
-      - run: unzip -q dist/cc-side-*.zip -d plugin
-      - run: '"$CC_SIDE_HELPER" --version'
-      - run: bun test tests/lifecycle.test.ts
-
   publish:
-    needs: verify
+    needs: build
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
