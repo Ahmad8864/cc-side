@@ -1,4 +1,4 @@
-`claude-code.d.ts` was exported by `/plugin-types` from Claude Code 2.1.280.
+`claude-code.d.ts` was exported by `/plugin-types` from Claude Code 2.1.283.
 Run `python3 scripts/update-mod-types.py` after upgrading Claude Code.
 The update bot runs the same command against the latest published CLI and
 opens a PR with the generated declarations and typecheck results.
