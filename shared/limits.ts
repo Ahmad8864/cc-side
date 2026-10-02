@@ -1,6 +1,8 @@
 // Mods refuses a whole drawing when one string or its serialized tree is larger.
 const stringLimit = 10000
 export const treeLimit = 100000
+// The longest message the side takes, in UTF-16 code units as the editor counts them.
+export const messageLimit = 50000
 
 const fence = /^ {0,3}(`{3,}|~{3,})/
 

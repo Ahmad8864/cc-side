@@ -9,6 +9,7 @@ import type {
 import { localCommands, parseCommand } from '../shared/commands.ts'
 import { errorMessage } from '../shared/errors.ts'
 import { lastExchange, sharedNote } from '../shared/handoff.ts'
+import { messageLimit } from '../shared/limits.ts'
 import { effortLevels } from '../shared/models.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
@@ -545,7 +546,7 @@ function isPost(data: unknown, generation: number): data is ComposerPost {
     typeof post.instance === 'string' &&
     /^[a-zA-Z0-9_-]{1,80}$/.test(post.instance) &&
     typeof post.text === 'string' &&
-    post.text.length <= 50000
+    post.text.length <= messageLimit
   )
 }
 
@@ -555,6 +556,6 @@ function isSubmission(submission: Submission, generation: number, instance: stri
     submission.id.startsWith(`${generation}:${instance}:`) &&
     /^[a-zA-Z0-9:_-]{1,160}$/.test(submission.id) &&
     typeof submission.text === 'string' &&
-    submission.text.length <= 50000
+    submission.text.length <= messageLimit
   )
 }

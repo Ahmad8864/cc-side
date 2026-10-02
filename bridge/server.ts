@@ -7,6 +7,10 @@ import { Conversation } from './conversation.ts'
 import { endProcessTree } from './platform.ts'
 import { prepareStart } from './prepare.ts'
 import { errorMessage } from '../shared/errors.ts'
+import { messageLimit } from '../shared/limits.ts'
+
+// Room for the longest message JSON-encoded, where one character can take six bytes.
+const requestLimit = messageLimit * 6 + 1024
 
 let activeConversation: Conversation | undefined
 async function main() {
@@ -29,10 +33,10 @@ async function main() {
     try {
       if (path === '/state' && request.method === 'GET') return Response.json(conversation.state)
       if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 })
-      if (Number(request.headers['content-length'] ?? 0) > 65536)
+      if (Number(request.headers['content-length'] ?? 0) > requestLimit)
         return new Response('Too large', { status: 413 })
       const raw = await text(request)
-      if (raw.length > 65536) return new Response('Too large', { status: 413 })
+      if (raw.length > requestLimit) return new Response('Too large', { status: 413 })
       const body = raw ? JSON.parse(raw) : {}
       if (path === '/send') {
         if (

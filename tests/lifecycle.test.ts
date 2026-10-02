@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { messageLimit } from '../shared/limits.ts'
 import { bundleHelper } from '../scripts/bundle.ts'
 
 // The runtimes the hook may run the helper with, where this machine has them.
@@ -75,7 +76,8 @@ for (const [name, runtime] of Object.entries(runtimes)) {
         started.push(...JSON.parse(await readFile(pids, 'utf8')))
         const headers = { Authorization: `Bearer ${token}` }
         expect((await fetch(`${url}/state`, { headers })).ok).toBe(true)
-        const message = { id: 'lifecycle', text: 'Hello from the lifecycle test' }
+        // The longest message the editor allows, in characters that take three bytes each.
+        const message = { id: 'lifecycle', text: '漢'.repeat(messageLimit) }
         const sent = await fetch(`${url}/send`, {
           method: 'POST',
           headers,

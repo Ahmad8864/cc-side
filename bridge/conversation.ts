@@ -19,6 +19,7 @@ import type {
 } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
 import { commandCatalog, parseCommand } from '../shared/commands.ts'
+import { messageLimit } from '../shared/limits.ts'
 import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { toolOutput } from './tool-output.ts'
 import { errorMessage } from '../shared/errors.ts'
@@ -293,8 +294,8 @@ export class Conversation {
 
   send(text: string, command = false) {
     if (!command) this.assertIdle()
-    if (!text.trim() || text.length > 50000)
-      throw new Error('Enter a message of at most 50,000 characters')
+    if (!text.trim() || text.length > messageLimit)
+      throw new Error(`Enter a message of at most ${messageLimit.toLocaleString('en')} characters`)
     this.state.messages.push({ id: randomUUID(), role: 'user', text })
     const preface = command ? '' : this.preface()
     const content = preface ? `${preface}\n\n${text}` : text

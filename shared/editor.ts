@@ -1,3 +1,5 @@
+import { messageLimit } from './limits.ts'
+
 // Pure text operations for the drawing-thread composer and other drawn text.
 // UTF-16 offsets match strings; navigation and wrapping use grapheme/cell bounds.
 type Glyph = { text: string; start: number; end: number; width: number }
@@ -173,7 +175,7 @@ export function edit(state: Editor, key: Key, columns: number): Editor {
     !/^f\d{1,2}$/.test(key.key)
   ) {
     const value = cleanText(key.key)
-    if (text.length + value.length <= 50000) return replace(cursor, cursor, value)
+    if (text.length + value.length <= messageLimit) return replace(cursor, cursor, value)
   }
   return state
 }
