@@ -33,11 +33,6 @@ releases.
 - Tools request approval in the pane, with edits shown as diffs and commands as
   code. Stop interrupts the current reply.
 - `/insert` puts the last reply in the main prompt at the cursor; `/copy` copies it.
-- `/share` hands the last reply, and the question it answered, to main's Claude
-  as context for your next message there. It starts no turn and leaves main's
-  prompt alone.
-- `/send <message>` sends main a message as if you typed it there. It waits for
-  main's current turn, and main's transcript notes that cc-side sent it.
 - When main moves on, `main is 2 replies ahead · /refresh` appears above the
   composer. `/refresh` re-forks the side at main's latest point and keeps your
   side discussion on screen; Claude gets it as text with your next message.

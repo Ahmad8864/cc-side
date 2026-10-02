@@ -41,10 +41,8 @@ async function harness({
   const scrolls: unknown[] = []
   const focuses: unknown[] = []
   const copies: string[] = []
-  const appended: any[] = []
-  const submitted: any[] = []
-  // Main's answers to the side: a prompt.fill refusal cause, a plugin's drop or deny reason.
-  const refusals: { fill?: string; submit?: string; append?: string } = {}
+  // Why main's prompt refuses text from the side, as prompt.fill reports it.
+  let fillRefusal: string | undefined
   let prompt = ''
   let startup: string | undefined
   let startupErrors = ''
@@ -61,11 +59,6 @@ async function harness({
       model: async () => 'sonnet',
       messages: async () => [],
       ...(claudeVersion === null ? {} : { version: async () => ({ version: claudeVersion }) }),
-      append: async (args: unknown) => {
-        if (refusals.append) return { deny: refusals.append }
-        appended.push(args)
-        return { message: args, uuid: `row-${appended.length}` }
-      },
     },
     plugin: { root: '/plugin' },
     settings: { read: async () => settings },
@@ -168,14 +161,9 @@ async function harness({
     prompt: {
       read: async () => ({ text: prompt, cursor: prompt.length }),
       fill: async ({ text }: { text: string }) => {
-        if (refusals.fill) return { isFilled: false, refusal: refusals.fill }
+        if (fillRefusal) return { isFilled: false, refusal: fillRefusal }
         prompt = text
         return { isFilled: true }
-      },
-      submit: async (args: { text: string }) => {
-        if (refusals.submit) return { drop: refusals.submit }
-        submitted.push(args)
-        return { text: args.text }
       },
     },
   }
@@ -226,9 +214,9 @@ async function harness({
     scrolls,
     focuses,
     copies,
-    appended,
-    submitted,
-    refusals,
+    refuseFill: (refusal: string) => {
+      fillRefusal = refusal
+    },
     prompt: () => prompt,
     setPrompt: (text: string) => {
       prompt = text
@@ -671,6 +659,7 @@ test('/insert and /copy share the last reply without buttons under every reply',
     messages: [
       { id: 'q', role: 'user', text: 'What should run first?' },
       { id: 'a', role: 'assistant', text: 'Run the migration first.' },
+      { id: 'h', role: 'assistant', text: '**Side chat** help', local: true },
     ],
   })
   await h.command()
@@ -685,49 +674,19 @@ test('/insert and /copy share the last reply without buttons under every reply',
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
 })
 
-test('/share gives main the last exchange as context, and /send speaks for the user in main', async () => {
-  const h = await harness({
-    messages: [
-      { id: 'q', role: 'user', text: 'What should run first?' },
-      { id: 'a', role: 'assistant', text: 'Run the migration first.' },
-      { id: 'h', role: 'assistant', text: '**Side chat** help', local: true },
-    ],
-  })
-  await h.command()
-  await h.submit('first', 1, '/share')
-  expect(h.appended).toHaveLength(1)
-  const row = h.appended[0].message
-  expect(row.type).toBe('user')
-  expect(row.content[0].text).toContain('What should run first?')
-  expect(row.content[0].text).toContain('Run the migration first.')
-  expect(row.content[0].text).not.toContain('help')
-  expect(JSON.stringify(await h.render())).toContain('Shared the last reply with the main chat')
-
-  await h.submit('first', 2, '/send')
-  expect(h.submitted).toEqual([])
-  expect(JSON.stringify(await h.render())).toContain('Type the message after /send')
-  await h.submit('first', 3, '/send run the migration tests')
-  expect(h.submitted).toEqual([{ text: 'run the migration tests', asUser: true }])
-  expect(h.requests.some((r) => r.path === '/send')).toBe(false)
-})
-
-test('when main refuses text from the side, the pane says why', async () => {
+test("when main's prompt refuses the last reply, /insert says why", async () => {
   const h = await harness({
     messages: [{ id: 'a', role: 'assistant', text: 'Run the migration first.' }],
   })
   await h.command()
-  const notice = async (seq: number, text: string) => {
-    await h.submit('first', seq, text)
+  const notice = async (seq: number) => {
+    await h.submit('first', seq, '/insert')
     return JSON.stringify(await h.render())
   }
-  h.refusals.fill = 'dialog'
-  expect(await notice(1, '/insert')).toContain('A dialog in the main chat has the keyboard')
-  h.refusals.fill = 'no_composer'
-  expect(await notice(2, '/insert')).toContain('The main prompt is not available')
-  h.refusals.append = 'Notes are off in this session.'
-  expect(await notice(3, '/share')).toContain('Notes are off in this session.')
-  h.refusals.submit = 'Prompts from plugins are blocked.'
-  expect(await notice(4, '/send hello')).toContain('Prompts from plugins are blocked.')
+  h.refuseFill('dialog')
+  expect(await notice(1)).toContain('A dialog in the main chat has the keyboard')
+  h.refuseFill('no_composer')
+  expect(await notice(2)).toContain('The main prompt is not available')
   expect(h.prompt()).toBe('')
 })
 

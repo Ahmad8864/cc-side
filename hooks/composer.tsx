@@ -150,7 +150,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
       const selected = shown[state.selected % shown.length]
       if (selected) {
         choose(selected, false)
-        if (!selected.awaitsArgument) instance.send()
+        if (!selected.opensPicker) instance.send()
       } else instance.send()
       return
     }

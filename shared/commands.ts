@@ -20,12 +20,6 @@ export const localCommands: SideCommand[] = [
     argumentHint: '',
   },
   { name: 'insert', description: 'Put the last reply in the main prompt', argumentHint: '' },
-  { name: 'share', description: 'Give the main chat the last reply as context', argumentHint: '' },
-  {
-    name: 'send',
-    description: 'Send a message to the main chat as your own',
-    argumentHint: '<message>',
-  },
   { name: 'copy', description: 'Copy the last reply', argumentHint: '' },
   { name: 'stop', description: 'Stop the current reply', argumentHint: '' },
   { name: 'close', description: 'Close and discard this side chat', argumentHint: '' },
@@ -65,8 +59,8 @@ export type Completion = {
   label: string
   description: string
   execute?: boolean
-  // Enter completes the command and waits for its argument instead of sending.
-  awaitsArgument?: boolean
+  // Enter completes the command and opens its picker instead of sending.
+  opensPicker?: boolean
 }
 // Commands whose argument is picked from a menu of choices.
 const pickers = ['model', 'effort', 'edit']
@@ -121,9 +115,6 @@ export function completions(
       value: `/${c.name}${c.argumentHint ? ' ' : ''}`,
       label: `/${c.name}`,
       description: c.description,
-      // A hint in angle brackets marks a required argument.
-      ...(pickers.includes(c.name) || c.argumentHint.startsWith('<')
-        ? { awaitsArgument: true }
-        : {}),
+      ...(pickers.includes(c.name) ? { opensPicker: true } : {}),
     }))
 }

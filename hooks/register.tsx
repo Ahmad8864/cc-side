@@ -50,15 +50,6 @@ export const register: Register = (on) => {
         await $.ui.close({ id: PANE })
       },
       insertInMain: async (text) => fillRefusal(await $.prompt.fill({ text, mode: 'insert' })),
-      // A user-role row main's Claude reads with the next prompt; the person does not see it.
-      shareWithMain: async (text) => {
-        const shared = await $.session.append({
-          message: { type: 'user', content: [{ type: 'text', text }] },
-        })
-        return shared.deny
-      },
-      // Queued behind a running main turn. The transcript still names the plugin.
-      sendToMain: async (text) => (await $.prompt.submit({ text, asUser: true })).drop,
       copy: async (text) => (await $.ui.copy({ text })).isCopied,
       readEditing: async () => (await $.store.get('canEdit')) === true,
       saveEditing: async (canEdit) => {

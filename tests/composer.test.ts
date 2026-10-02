@@ -23,6 +23,7 @@ function harness(seed = '') {
     commands: [
       ...localCommands,
       { name: 'clear', description: 'Clear context', argumentHint: '[name]' },
+      { name: 'compact', description: 'Summarize', argumentHint: '<optional instructions>' },
     ],
     models: [],
     model: 'sonnet',
@@ -153,17 +154,13 @@ test('Enter runs an exact slash command with optional arguments, while /model op
   const h = harness('/clear')
   h.key({ key: 'return' })
   expect(h.posts.at(-1).submit.text.trim()).toBe('/clear')
+  const compact = harness('/compact')
+  compact.key({ key: 'return' })
+  expect(compact.posts.at(-1).submit.text.trim()).toBe('/compact')
   const models = harness('/model')
   models.key({ key: 'return' })
   expect(models.posts.at(-1).text).toBe('/model ')
   expect(models.posts.at(-1).submit).toBeUndefined()
-})
-
-test('Enter completes a command with a required argument and waits for it', () => {
-  const h = harness('/sen')
-  h.key({ key: 'return' })
-  expect(h.posts.at(-1).text).toBe('/send ')
-  expect(h.posts.at(-1).submit).toBeUndefined()
 })
 
 test('the /effort menu marks the current level and lines up its descriptions', () => {
