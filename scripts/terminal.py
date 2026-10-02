@@ -4,6 +4,7 @@ Use work/venv/bin/python scripts/terminal.py serve work/e2e
 Then: ... terminal.py send work/e2e '/side' (or key/screen/quit).
 Only synthetic test sessions should enable the trace: it includes conversation text.
 """
+import functools
 import json
 import os
 import re
@@ -17,6 +18,18 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 CLAUDE = os.environ.get('CC_SIDE_CLAUDE') or shutil.which('claude') or 'claude'
 PLUGIN = Path(os.environ.get('CC_SIDE_PLUGIN_DIR', ROOT)).resolve()
+
+
+@functools.cache
+def capture_fonts():
+    """Regular and bold faces for screen.png: Menlo on macOS, else Pillow's own font."""
+    from PIL import ImageFont
+    try:
+        menlo = '/System/Library/Fonts/Menlo.ttc'
+        return ImageFont.truetype(menlo, 15), ImageFont.truetype(menlo, 15, index=1)
+    except OSError:
+        fallback = ImageFont.load_default(15)
+        return fallback, fallback
 
 
 def serve(directory):
@@ -60,9 +73,8 @@ def serve(directory):
     def capture():
         text = '\n'.join(screen.display)
         (directory / 'screen.txt').write_text(text)
-        from PIL import Image, ImageDraw, ImageFont
-        font = ImageFont.truetype('/System/Library/Fonts/Menlo.ttc', 15)
-        bold = ImageFont.truetype('/System/Library/Fonts/Menlo.ttc', 15, index=1)
+        from PIL import Image, ImageDraw
+        font, bold = capture_fonts()
         img = Image.new('RGB', (screen.columns * 9, screen.lines * 19), '#141414')
         draw = ImageDraw.Draw(img)
         colors = {'default': '#ddd8d0', 'black': '#101010', 'red': '#f07178',
