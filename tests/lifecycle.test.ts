@@ -45,7 +45,7 @@ async function until(condition: () => boolean | Promise<boolean>) {
 
 for (const [name, runtime] of Object.entries(runtimes)) {
   test.skipIf(!runtime)(
-    `closing a side chat on ${name} ends its helper, its Claude, and their tools`,
+    `a side chat on ${name} takes a message, and closing it ends its helper, its Claude, and their tools`,
     async () => {
       const directory = await mkdtemp(join(tmpdir(), 'cc-side lifecycle '))
       const pids = join(directory, 'pids.json')
@@ -75,6 +75,13 @@ for (const [name, runtime] of Object.entries(runtimes)) {
         started.push(...JSON.parse(await readFile(pids, 'utf8')))
         const headers = { Authorization: `Bearer ${token}` }
         expect((await fetch(`${url}/state`, { headers })).ok).toBe(true)
+        const message = { id: 'lifecycle', text: 'Hello from the lifecycle test' }
+        const sent = await fetch(`${url}/send`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(message),
+        })
+        expect(sent.ok).toBe(true)
         await fetch(`${url}/close`, { method: 'POST', headers })
         await until(() => !started.some(isRunning))
       } finally {

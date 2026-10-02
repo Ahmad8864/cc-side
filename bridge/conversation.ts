@@ -8,6 +8,7 @@ import {
   type SDKUserMessage,
   type Query,
 } from '@anthropic-ai/claude-agent-sdk'
+import { randomUUID } from 'node:crypto'
 import type {
   Activity,
   ChatMessage,
@@ -65,7 +66,7 @@ export class Conversation {
       this.state.messages = [
         ...options.carried,
         {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           role: 'notice',
           text: "Refreshed with the main chat's latest context",
         },
@@ -101,7 +102,7 @@ export class Conversation {
         resolve({ behavior: 'deny', message: 'Side chat closed or request cancelled' })
         return
       }
-      const id = crypto.randomUUID()
+      const id = randomUUID()
       const settle = (result: PermissionResult) => {
         if (!this.approvals.delete(id)) return
         signal.removeEventListener('abort', abort)
@@ -278,7 +279,7 @@ export class Conversation {
   }
 
   private local(text: string) {
-    this.state.messages.push({ id: crypto.randomUUID(), role: 'assistant', text, local: true })
+    this.state.messages.push({ id: randomUUID(), role: 'assistant', text, local: true })
     this.state.notice = undefined
     this.changed()
   }
@@ -294,7 +295,7 @@ export class Conversation {
     if (!command) this.assertIdle()
     if (!text.trim() || text.length > 50000)
       throw new Error('Enter a message of at most 50,000 characters')
-    this.state.messages.push({ id: crypto.randomUUID(), role: 'user', text })
+    this.state.messages.push({ id: randomUUID(), role: 'user', text })
     const preface = command ? '' : this.preface()
     const content = preface ? `${preface}\n\n${text}` : text
     if (!command) {
