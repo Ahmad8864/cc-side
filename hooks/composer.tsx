@@ -230,6 +230,9 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     } else redraw()
   })
   const rule = '─'.repeat(width + 2)
+  // A menu longer than it shows says where its selection is, set into the rule above it.
+  const counter =
+    instance.menu.length > menuSize ? ` ${state.selected + 1}/${instance.menu.length} ` : ''
   return (
     <Box flexDirection="column" width={width + 3}>
       {animation ? (
@@ -269,7 +272,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
           </Box>
         )
       })}
-      <Text dimColor>{rule}</Text>
+      <Text dimColor>{rule.slice(counter.length + 1) + counter + '─'}</Text>
       {visible.map((item, index) => (
         <Box key={item.value} height={1}>
           <Text
@@ -282,13 +285,6 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
           </Text>
         </Box>
       ))}
-      {instance.menu.length > menuSize ? (
-        <Box justifyContent="flex-end">
-          <Text dimColor>
-            {state.selected + 1}/{instance.menu.length}
-          </Text>
-        </Box>
-      ) : null}
     </Box>
   )
 }

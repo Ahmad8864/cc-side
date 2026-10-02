@@ -206,6 +206,19 @@ test('a folder completes open, quoted when it has a space, and Enter sends as ty
   expect(h.posts.at(-1).submit.text).toBe('@"my notes/')
 })
 
+test('a long menu shows where its selection is in the rule above it, not on a row of its own', () => {
+  const h = harness('@')
+  h.props.mention = { query: '', paths: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] }
+  h.key({ key: 'down' })
+  const texts = nodes(h.render())
+    .filter((n) => n.tag === 'Text')
+    .map((n) => n.children.join(''))
+  const rule = texts.find((text) => text.startsWith('─') && /\d\/\d/.test(text))
+  expect(rule).toEndWith('─ 2/8 ─')
+  expect(rule).toHaveLength(texts[0].length)
+  expect(texts.filter((text) => text.includes('2/8'))).toHaveLength(1)
+})
+
 test('the /effort menu marks the current level and lines up its descriptions', () => {
   expect(menuRows(harness('/effort ').render())).toEqual([
     '› low    ',
