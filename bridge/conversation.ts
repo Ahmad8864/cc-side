@@ -57,7 +57,6 @@ export class Conversation {
   private submissions = new Map<string, { text: string; result: Promise<void> }>()
 
   constructor(options: StartOptions, createQuery: typeof query = query) {
-    this.state.context = options.resumeSessionAt ? 'inherited' : 'empty'
     this.state.model = options.model
     this.state.cwd = options.cwd
     this.state.effort = options.effort ?? 'auto'
@@ -446,11 +445,7 @@ export class Conversation {
       }
     })
     if (snapshot.model !== '<synthetic>') {
-      const value = {
-        id: snapshot.id,
-        usage: snapshot.usage as Usage,
-        cacheMiss: (snapshot as unknown as { diagnostics?: unknown }).diagnostics,
-      }
+      const value = { id: snapshot.id, usage: snapshot.usage as Usage }
       const index = this.requestIndexes.get(snapshot.id)
       if (index !== undefined) this.state.requests[index] = value
       else {
@@ -477,7 +472,6 @@ export class Conversation {
   }
 
   private acceptResult(message: Extract<SDKMessage, { type: 'result' }>) {
-    this.state.usage = message.usage
     this.state.activity = null
     this.state.status = message.is_error && !this.stopping ? 'error' : 'ready'
     if (this.stopping) {
@@ -501,7 +495,6 @@ export class Conversation {
     this.blocks.clear()
     this.state.requests = []
     this.requestIndexes.clear()
-    this.state.context = 'empty'
     this.state.notice = undefined
     this.state.activity = null
     this.needsSideInstruction = true
@@ -512,7 +505,6 @@ export class Conversation {
     if (this.closed) return
     if (message.type === 'system' && message.subtype === 'init') {
       this.state.sessionId = message.session_id
-      this.state.runtime = message.claude_code_version
       this.state.model = message.model
       if (message.effort !== undefined) this.state.effort = message.effort ?? 'auto'
       if (this.state.status === 'starting') this.state.status = 'ready'

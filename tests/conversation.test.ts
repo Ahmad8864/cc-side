@@ -88,7 +88,6 @@ test('an empty parent starts without resume flags and still disables persistence
   expect(h.options.resume).toBeUndefined()
   expect(h.options.forkSession).toBeUndefined()
   expect(h.options.persistSession).toBe(false)
-  expect(h.chat.state.context).toBe('empty')
   h.chat.close()
 })
 

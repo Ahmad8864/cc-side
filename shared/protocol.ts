@@ -61,11 +61,8 @@ export type ChatState = {
   sessionId?: string
   error?: string
   notice?: string
-  context?: 'inherited' | 'empty'
-  usage?: Usage
-  requests: { id: string; usage: Usage; cacheMiss?: unknown }[]
+  requests: { id: string; usage: Usage }[]
   textDeltas: number
-  runtime?: string
   model?: string
   effort?: string
   canEdit?: boolean
