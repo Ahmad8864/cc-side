@@ -38,7 +38,7 @@ export function findClaude(parent: number, env: Env = process.env): string | und
 export function endProcessTree(close: () => void) {
   // Windows has no process groups, and taskkill finds children only through living parents.
   if (process.platform === 'win32') output('taskkill', ['/PID', String(process.pid), '/T', '/F'])
-  close()
+  // Scheduled first, so the group still ends if closing throws.
   setTimeout(() => {
     try {
       process.kill(-process.pid, 'SIGKILL')
@@ -46,6 +46,7 @@ export function endProcessTree(close: () => void) {
       process.exit(0)
     }
   }, 1000)
+  close()
 }
 
 function executableOf(pid: number, env: Env) {
