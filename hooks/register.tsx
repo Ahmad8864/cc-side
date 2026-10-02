@@ -51,6 +51,10 @@ export const register: Register = (on) => {
       },
       insertInMain: async (text) => fillRefusal(await $.prompt.fill({ text, mode: 'insert' })),
       copy: async (text) => (await $.ui.copy({ text })).isCopied,
+      listFiles: async () => {
+        const listing = await $.process.run(['git', 'ls-files', '-z', '-co', '--exclude-standard'])
+        return listing.exitCode === 0 ? listing.stdout.split('\0').filter(Boolean) : []
+      },
       readEditing: async () => (await $.store.get('canEdit')) === true,
       saveEditing: async (canEdit) => {
         await $.store.set('canEdit', canEdit)

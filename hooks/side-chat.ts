@@ -9,6 +9,7 @@ import type {
 import { localCommands, parseCommand } from '../shared/commands.ts'
 import { errorMessage } from '../shared/errors.ts'
 import { messageLimit } from '../shared/limits.ts'
+import { rankPaths, withFolders } from '../shared/mentions.ts'
 import { effortLevels } from '../shared/models.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
@@ -36,6 +37,8 @@ type Host = {
   // Resolves to why main's prompt refused the text, or undefined once it holds it.
   insertInMain: (text: string) => Promise<string | undefined>
   copy: (text: string) => Promise<boolean>
+  // The project's files relative to its folder, as git lists them; none outside a repository.
+  listFiles: () => Promise<string[]>
 }
 
 type ComposerPost = {
@@ -44,6 +47,7 @@ type ComposerPost = {
   instance: string
   text: string
   submit?: Submission
+  mention?: string
 }
 
 const empty = (): ChatState => ({
@@ -83,6 +87,9 @@ export class SideChat {
   private commandSequence = 0
   private composerColumns = 70
   private composerRows = 40
+  // The project's files and folders for `@` completion, listed again once they are stale.
+  private projectPaths: { paths: Promise<string[]>; listedAt: number } | undefined
+  private mention: ComposerProps['mention'] = null
   private focusedPermission: string | undefined
   private savedEditing = false
   // Main replies that finished since the side forked, and a refresh in flight.
@@ -146,6 +153,7 @@ export class SideChat {
       model: state.model ?? '',
       effort: state.effort ?? '',
       canEdit: state.canEdit ?? false,
+      mention: this.mention,
     }
   }
 
@@ -195,6 +203,9 @@ export class SideChat {
         this.host.invalidate()
       }
     }
+    const mention = data.mention === undefined ? null : await this.matches(data.mention)
+    if (data.epoch !== this.generation) return {}
+    this.mention = mention
     // Reply on the Client's own channel too; it must not depend on a later
     // pane redraw to release the pending send after an error or remount.
     return { props: this.composerProps() }
@@ -309,6 +320,8 @@ export class SideChat {
     this.receipts.clear()
     this.pendingSubmissions.clear()
     this.expanded.clear()
+    this.projectPaths = undefined
+    this.mention = null
     this.host.invalidate()
     if (old) {
       try {
@@ -323,6 +336,17 @@ export class SideChat {
   private setEndpoint(endpoint: Endpoint | undefined) {
     this.endpoint = endpoint
     void this.host.saveConnection(endpoint ?? null).catch(() => {})
+  }
+
+  // The project's paths matching an `@` mention being typed. They are listed at most every
+  // 10 seconds, and concurrent posts share one listing, so they answer in order.
+  private async matches(query: string) {
+    if (!this.projectPaths || Date.now() - this.projectPaths.listedAt > 10000)
+      this.projectPaths = {
+        paths: this.host.listFiles().then(withFolders, () => []),
+        listedAt: Date.now(),
+      }
+    return { query, paths: rankPaths(await this.projectPaths.paths, query) }
   }
 
   // Sending, or the helper is answering or waiting on an approval.
@@ -517,7 +541,8 @@ function isPost(data: unknown, generation: number): data is ComposerPost {
     typeof post.instance === 'string' &&
     /^[a-zA-Z0-9_-]{1,80}$/.test(post.instance) &&
     typeof post.text === 'string' &&
-    post.text.length <= messageLimit
+    post.text.length <= messageLimit &&
+    (post.mention === undefined || typeof post.mention === 'string')
   )
 }
 

@@ -11,6 +11,8 @@ type Setup = Partial<
   claudeVersion?: string | null
   // What each runtime on PATH prints for `--version`.
   runtimes?: Record<string, string>
+  // The files `git ls-files` lists; null outside a repository.
+  files?: string[] | null
 }
 
 // Exercise the real pane hooks, including Button callbacks. The host can hide
@@ -22,6 +24,7 @@ async function harness({
   env = {},
   claudeVersion = '2.1.287',
   runtimes = { node: 'v22.12.0' },
+  files = null,
   ...selection
 }: Setup = {}) {
   const handlers = new Map<string, (...args: any[]) => any>()
@@ -30,6 +33,7 @@ async function harness({
     register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
   load()
   let starts = 0,
+    gitRuns = 0,
     hidden = false,
     failing: string | undefined,
     failedPolls = 0
@@ -64,6 +68,12 @@ async function harness({
     settings: { read: async () => settings },
     process: {
       run: async (command: string[], options: { stdin: string }) => {
+        if (command[0] === 'git') {
+          gitRuns++
+          return files
+            ? { exitCode: 0, stdout: files.map((file) => `${file}\0`).join(''), stderr: '' }
+            : { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository' }
+        }
         if (command[1] === '--version') {
           if (!runtimes[command[0]]) throw new Error(`${command[0]} not found`)
           return { exitCode: 0, stdout: `${runtimes[command[0]]}\n` }
@@ -187,6 +197,16 @@ async function harness({
     })
   const render = async (columns = 180, bodyColumns = 78) => nodes(await tree(columns, bodyColumns))
   const editor = async () => (await render()).find((n) => n.tag === 'Client')!
+  // Posts a draft without sending it, with the `@` path being typed, as the composer does.
+  const type = async (instance: string, seq: number, text: string, mention?: string) => {
+    const client = await editor(),
+      epoch = client.props.props.epoch
+    return invoke('ui.message', {
+      requestId: 'side',
+      element: client.props.key,
+      data: { epoch, instance, seq, text, ...(mention === undefined ? {} : { mention }) },
+    })
+  }
   const submit = async (instance: string, seq: number, text: string) => {
     const client = await editor(),
       epoch = client.props.props.epoch
@@ -202,7 +222,9 @@ async function harness({
     tree,
     render,
     editor,
+    type,
     submit,
+    gitRuns: () => gitRuns,
     requests,
     opens,
     launches,
@@ -701,6 +723,31 @@ test('the pane runs its own commands in any case or with extra words, never send
   await h.submit('first', 3, '/close now')
   expect(h.hidden()).toBe(true)
   expect(h.requests.some((r) => r.path === '/send')).toBe(false)
+})
+
+test('an @ mention gets the project paths matching it, listed once from git', async () => {
+  const h = await harness({ files: ['src/components/Button.tsx', 'docs/guide.md'] })
+  await h.command()
+  expect((await h.type('first', 1, 'see @but', 'but')).props.mention).toEqual({
+    query: 'but',
+    paths: ['src/components/Button.tsx'],
+  })
+  expect((await h.type('first', 2, 'see @src/', 'src/')).props.mention.paths).toEqual([
+    'src/',
+    'src/components/',
+    'src/components/Button.tsx',
+  ])
+  expect(h.gitRuns()).toBe(1)
+  expect((await h.type('first', 3, 'see the guide')).props.mention).toBeNull()
+})
+
+test('outside a git repository an @ mention has no matches', async () => {
+  const h = await harness()
+  await h.command()
+  expect((await h.type('first', 1, '@gui', 'gui')).props.mention).toEqual({
+    query: 'gui',
+    paths: [],
+  })
 })
 
 test('main replies since the fork show a quiet hint, and /refresh re-forks in place', async () => {

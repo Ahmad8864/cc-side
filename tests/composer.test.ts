@@ -29,6 +29,7 @@ function harness(seed = '') {
     model: 'sonnet',
     effort: 'high',
     canEdit: false,
+    mention: null,
   }
   const surface = {
     get state() {
@@ -176,6 +177,32 @@ test('while Claude works, only /stop and /close go, in any case', () => {
     h.key({ key: 'return' })
     expect(!!h.posts.at(-1)?.submit).toBe(goes)
   }
+})
+
+test('an @ mention offers the matching paths once the host answers; Tab inserts one', () => {
+  const h = harness('see @gu')
+  h.key({ key: 'i' })
+  expect(h.posts.at(-1).mention).toBe('gui')
+  expect(JSON.stringify(h.render())).not.toContain('+ docs/guide.md')
+  h.props.mention = { query: 'gu', paths: ['docs/guide.md'] }
+  expect(JSON.stringify(h.render())).not.toContain('+ docs/guide.md')
+  h.props.mention = { query: 'gui', paths: ['docs/guide.md', 'my notes/'] }
+  expect(JSON.stringify(h.render())).toContain('+ docs/guide.md')
+  h.key({ key: 'tab' })
+  expect(h.posts.at(-1)).toMatchObject({ text: 'see @docs/guide.md ' })
+  expect(h.posts.at(-1).mention).toBeUndefined()
+})
+
+test('a folder completes open, quoted when it has a space, and Enter sends as typed', () => {
+  const h = harness('@my')
+  h.props.mention = { query: 'my', paths: ['my notes/'] }
+  h.render()
+  h.key({ key: 'tab' })
+  expect(h.posts.at(-1)).toMatchObject({ text: '@"my notes/', mention: 'my notes/' })
+  h.props.mention = { query: 'my notes/', paths: ['my notes/plan.md'] }
+  h.render()
+  h.key({ key: 'return' })
+  expect(h.posts.at(-1).submit.text).toBe('@"my notes/')
 })
 
 test('the /effort menu marks the current level and lines up its descriptions', () => {

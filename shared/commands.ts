@@ -87,6 +87,8 @@ export type Completion = {
   execute?: boolean
   // Enter completes the command and opens its picker instead of sending.
   opensPicker?: boolean
+  // The part of the draft the value replaces, when it is not the whole draft.
+  replaces?: { start: number; end: number }
 }
 // Commands whose argument is picked from a menu of choices.
 const pickers = ['model', 'effort', 'edit']

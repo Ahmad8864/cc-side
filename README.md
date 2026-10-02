@@ -27,6 +27,8 @@ releases.
 - `/side` opens the pane; `/side your question` opens it and sends a question.
 - Click the composer to type. Enter sends; Shift+Enter adds a line.
 - Type `/` for commands and project skills. `/model` and `/effort` affect only the side.
+- Type `@` to mention a file or folder, as in main; Tab inserts the highlighted path.
+  Suggestions come from git, so they appear only in a git repository.
 - Side chats start read-only: Claude can read and search but not edit files.
   `/edit on`, or clicking `read-only` in the header, allows edits. New side chats
   start the way you last chose.
@@ -48,6 +50,8 @@ its automatic sizing.
 - **Paste is not supported reliably.** Claude can route pasted text to the main
   prompt even after clicking the side editor. The current Mods API lacks paste
   and focus-loss events. Initial keyboard focus also requires a click.
+- Files you mention with `@` reach Claude, but the side doesn't list them under your
+  message as main does: Claude Code doesn't report what it attached.
 - Context is a snapshot from when the pane opened or was last refreshed. A refresh
   carries the side's questions and answers as text, not its tool results. An
   empty main chat starts a fresh side conversation.

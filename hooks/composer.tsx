@@ -3,6 +3,7 @@ import type { Activity, Receipt, SideCommand, SideModel, Submission } from '../s
 import { completions, worksWhileBusy, type Completion } from '../shared/commands.ts'
 import { caret, edit, layout, normalizeKey, offsetAt, type Editor } from '../shared/editor.ts'
 import { activityFrame } from '../shared/activity.ts'
+import { mentionAt, mentionText } from '../shared/mentions.ts'
 
 export type ComposerProps = {
   epoch: number
@@ -17,6 +18,8 @@ export type ComposerProps = {
   model: string
   effort: string
   canEdit: boolean
+  // The host's matches for the `@` path being typed, and the path they match.
+  mention: { query: string; paths: string[] } | null
 }
 type State = Editor & {
   instance: string
@@ -33,9 +36,22 @@ type State = Editor & {
 }
 type IO = { state: State; props: ComposerProps; menu: Completion[]; send: () => void }
 const instances = new WeakMap<object, IO>()
-const menuFor = (text: string, props: ComposerProps) => completions(text, props.commands, props)
+// The paths matching the `@` mention at the caret once the host has answered for it, or the
+// commands matching a slash command.
+function menuFor({ text, cursor }: Editor, props: ComposerProps): Completion[] {
+  const typed = mentionAt(text, cursor)
+  if (!typed) return completions(text, props.commands, props)
+  if (props.mention?.query !== typed.query) return []
+  return props.mention.paths.map((path) => ({
+    value: mentionText(path),
+    label: `+ ${path}`,
+    description: '',
+    replaces: typed,
+  }))
+}
 
 function snapshot(io: IO, surface: ClientSurface<State>) {
+  const mention = mentionAt(io.state.text, io.state.cursor)
   // A complete snapshot survives Client.post coalescing. The unacknowledged
   // submit stays in every subsequent snapshot, and the host handles it once.
   surface.post({
@@ -44,6 +60,8 @@ function snapshot(io: IO, surface: ClientSurface<State>) {
     text: io.state.text,
     instance: io.state.instance,
     ...(io.state.pending ? { submit: io.state.pending } : {}),
+    // The `@` path being typed, for the host to match against the project's files.
+    ...(mention ? { mention: mention.query } : {}),
   })
 }
 
@@ -93,11 +111,11 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     surface.setState({ ...instance.state })
     snapshot(instance, surface)
   }
-  const setText = (text: string) => {
+  const setText = (text: string, cursor = text.length) => {
     instance.state = {
       ...instance.state,
       text,
-      cursor: text.length,
+      cursor,
       selected: 0,
       hiddenMenu: false,
       preferredColumn: undefined,
@@ -116,9 +134,11 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     }
     redraw()
   }
-  instance.menu = io.state.hiddenMenu ? [] : menuFor(io.state.text, props)
+  instance.menu = io.state.hiddenMenu ? [] : menuFor(io.state, props)
   const choose = (item: Completion, execute: boolean) => {
-    setText(item.value)
+    const { text } = instance.state
+    const { start, end } = item.replaces ?? { start: 0, end: text.length }
+    setText(text.slice(0, start) + item.value + text.slice(end), start + item.value.length)
     if (execute && item.execute) instance.send()
   }
   surface.onKey((key) => {
@@ -126,7 +146,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     const state = instance.state
     state.active = true
     if (state.pending) return
-    const menu = menuFor(state.text, instance.props)
+    const menu = menuFor(state, instance.props)
     const shown = state.hiddenMenu ? [] : menu
     if (key.ctrl && key.key === 'g') {
       state.hiddenMenu = true
@@ -144,7 +164,8 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
     }
     if (key.key === 'return' && !key.shift && !key.meta) {
       const selected = shown[state.selected % shown.length]
-      if (selected) {
+      // As in Claude's own prompt, Enter sends an `@` mention as typed; Tab completes it.
+      if (selected && !selected.replaces) {
         choose(selected, false)
         if (!selected.opensPicker) instance.send()
       } else instance.send()
