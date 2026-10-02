@@ -1,76 +1,76 @@
 # cc-side
 
-A temporary side chat for Claude Code. Run `/side` to open a second conversation
-on the right, with the main chat's context and its own tools, model, and follow-ups.
-Closing it discards the conversation.
+A side chat for Claude Code. `/side` opens a second conversation beside the main one,
+starting from the main chat's context. Ask questions, review code, or try an idea while
+the main agent keeps working, without adding any of it to the main conversation.
+Closing the side discards it.
 
 ![CC-Side demo: inspect code in the side chat while the main agent works, then send a test request back.](docs/cc-side-demo.gif)
 
-## Install
+## Quick start
 
-Requires Claude Code 2.1.287 or later and Node.js 18 or later (or Bun) on your
-PATH, on macOS, Linux, or Windows. The side chat's helper runs on whichever it
-finds first.
+You need Claude Code 2.1.287 or later, Node.js 18+ or Bun, and a terminal at least
+110 columns wide, on macOS, Linux, or Windows.
 
-```sh
-claude plugin marketplace add Ahmad8864/cc-side
-claude plugin install cc-side@cc-side
-```
+1. Install the plugin:
 
-The side chat draws in Claude's fullscreen renderer, in a terminal at least 110
-columns wide. Turn fullscreen on once with `/tui fullscreen`; Claude keeps it for
-later sessions. Tested with Claude Code **2.1.287**; Mods APIs can change between
-releases.
+   ```sh
+   claude plugin marketplace add Ahmad8864/cc-side
+   claude plugin install cc-side@cc-side
+   ```
 
-## Usage
+2. In Claude Code, turn on the fullscreen renderer once: `/tui fullscreen`.
+3. Run `/side`, or `/side <question>` to ask straight away.
 
-- `/side` opens the pane; `/side your question` opens it and sends a question.
-- Click the composer to type. Enter sends; Shift+Enter adds a line.
-- Type `/` for commands and project skills. `/model` and `/effort` affect only the side.
-- Type `@` to mention a file or folder, as in main; Tab inserts the highlighted path.
-  Suggestions come from git, so they appear only in a git repository.
-- Side chats start read-only: Claude can read and search but not edit files.
-  `/edit on`, or clicking `read-only` in the header, allows edits. New side chats
-  start the way you last chose.
-- Tools request approval in the pane, with edits shown as diffs and commands as
-  code. Stop interrupts the current reply.
-- `/insert` puts the last reply in the main prompt at the cursor; `/copy` copies it.
-- When main moves on, `main is 2 replies ahead · /refresh` appears above the
-  composer. `/refresh` re-forks the side at main's latest point and keeps your
-  side discussion on screen; Claude gets it as text with your next message.
-- Tool rows show compact arguments and output. Click a row to expand its details.
-- Escape returns to main. ×, `/close`, or `/side close` discards the side chat and draft.
-- A rejected `/side` question returns to the main prompt for retry. It is not queued.
+## Using it
 
-The pane resizes with the terminal. A manually saved Claude pane width overrides
-its automatic sizing.
+| Input              | Does                                                           |
+| ------------------ | -------------------------------------------------------------- |
+| Click the composer | Type in the side. Enter sends; Shift+Enter adds a line         |
+| `/`                | Side commands, plus Claude Code's own commands and your skills |
+| `@`                | Mention a file or folder; Tab inserts it (in a git repository) |
+| ↑ ↓                | Pick a suggestion, or bring back a message you sent            |
+| Esc                | Back to main                                                   |
+| Click a tool row   | Expand its details                                             |
+
+| Command                 | Does                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `/model`, `/effort`     | Change the side's model or effort; main keeps its own                                                           |
+| `/edit on`, `/edit off` | Allow or block file edits. Side chats start read-only and remember your choice; the header badge toggles it too |
+| `/refresh`              | Catch up to main's latest point, keeping this discussion. A `main is 2 replies ahead` hint offers it            |
+| `/insert`               | Put the last reply into main's prompt                                                                           |
+| `/copy`                 | Copy the last reply                                                                                             |
+| `/stop`                 | Stop the current reply (or press Stop)                                                                          |
+| `/close`                | Discard the side chat (or ×, or `/side close` from main)                                                        |
+
+## How it works
+
+- **Context.** The side sees main's conversation up to when you opened or refreshed it;
+  from an empty main chat it starts fresh. A refresh brings the side's questions and
+  answers along as text, without their tool results.
+- **Tools.** Claude asks for approval in the pane, showing edits as diffs. Read-only mode
+  blocks Claude's file-editing tools, but shell commands follow your usual approval
+  rules, so an allowed command can still write files.
+- **Files.** Both chats work in the same folder, so file changes outlast the side. The
+  side's own transcript isn't saved.
+- **Cost.** Opening the pane makes no model request. With the same model and effort as
+  main, the side reuses main's prompt cache: a measured Sonnet fork read 51,774 cached
+  tokens and wrote 336. `/side stats` totals the side's cache use.
+- **Layout.** The pane resizes with the terminal, unless you saved a pane width in Claude.
 
 ## Limits
 
-- **Paste is not supported reliably.** Claude can route pasted text to the main
-  prompt even after clicking the side editor. The current Mods API lacks paste
-  and focus-loss events. Initial keyboard focus also requires a click.
-- Files you mention with `@` reach Claude, but the side doesn't list them under your
-  message as main does: Claude Code doesn't report what it attached.
-- Context is a snapshot from when the pane opened or was last refreshed. A refresh
-  carries the side's questions and answers as text, not its tool results. An
-  empty main chat starts a fresh side conversation.
-- A side chat reuses the main chat's prompt cache when it opens and on `/refresh`,
-  while its model and effort match main's: a measured fork on Sonnet read 51,774
-  cached tokens and wrote 336. With another model or effort, the side writes its
-  context once more. Opening a pane alone makes no model request. `/side stats`
-  totals the side's cache reads and writes.
-- The chats share a working directory: file changes survive closing the side.
-  The child transcript is not resumable, but tool files and configured logging
-  can persist.
-- Read-only blocks Claude's file-editing tools. Shell commands still follow your
-  approval rules, so an allowed command that writes files can run.
-- Permission and sandbox settings are copied when the pane opens. Session-only
-  rules, CLI tool restrictions, and live mode changes are not reliably inherited.
-- This is a prototype, used mostly on macOS. Long histories, attachments, every
-  Claude command, and other terminals have not been exhaustively tested.
+- **Paste lands in main.** Mods has no paste or focus events yet, so type in the side
+  after clicking it.
+- **Mentioned files aren't listed** under your message as in main; Claude Code doesn't
+  report what it attached.
+- **Permission and sandbox settings are copied when the pane opens.** Session-only rules,
+  CLI tool restrictions, and later mode changes may not carry over.
+- **`/side <question>` doesn't queue.** If the side is busy, the question goes back to
+  your prompt.
+- **It's a prototype,** used mostly on macOS and tested with Claude Code 2.1.287. Mods
+  APIs can change between releases; long histories, attachments, and other terminals
+  are lightly tested.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the code layout and tests.
-
-MIT licensed. Bundled components retain their own [licenses](licenses/).
-An unofficial project, not affiliated with Anthropic.
+[Contributing](CONTRIBUTING.md) · MIT licensed; bundled components keep their own
+[licenses](licenses/) · Unofficial, not affiliated with Anthropic
