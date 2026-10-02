@@ -163,6 +163,21 @@ test('Enter runs an exact slash command with optional arguments, while /model op
   expect(models.posts.at(-1).submit).toBeUndefined()
 })
 
+test('while Claude works, only /stop and /close go, in any case', () => {
+  for (const [text, goes] of [
+    ['/Stop', true],
+    ['/close now', true],
+    ['/refresh', false],
+    ['and also this', false],
+  ] as const) {
+    const h = harness(text)
+    h.props.busy = true
+    h.render()
+    h.key({ key: 'return' })
+    expect(!!h.posts.at(-1)?.submit).toBe(goes)
+  }
+})
+
 test('the /effort menu marks the current level and lines up its descriptions', () => {
   expect(menuRows(harness('/effort ').render())).toEqual([
     '› low    ',

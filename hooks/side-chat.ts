@@ -401,15 +401,16 @@ export class SideChat {
     id = `${this.generation}:command:${++this.commandSequence}`,
   ): Promise<boolean> {
     const trimmed = text.trim()
-    if (trimmed === '/close') {
+    // Commands the pane runs itself; worksWhileBusy names the ones taken while Claude works.
+    const command = parseCommand(trimmed)?.name
+    if (command === 'close') {
       await this.host.closePane()
       return true
     }
-    if (trimmed === '/stop') return this.action('/stop')
+    if (command === 'stop') return this.action('/stop')
     if (!trimmed || this.busy() || this.refreshing || !this.endpoint) return false
-    const command = parseCommand(trimmed)
-    if (command?.name === 'insert' || command?.name === 'copy') return this.shareReply(command.name)
-    if (trimmed === '/refresh') {
+    if (command === 'insert' || command === 'copy') return this.shareReply(command)
+    if (command === 'refresh') {
       void this.refresh()
       return true
     }

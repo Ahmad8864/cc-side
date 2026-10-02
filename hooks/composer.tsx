@@ -1,6 +1,6 @@
 import type { ClientModule, ClientSurface } from 'claude-code'
 import type { Activity, Receipt, SideCommand, SideModel, Submission } from '../shared/protocol.ts'
-import { completions, type Completion } from '../shared/commands.ts'
+import { completions, worksWhileBusy, type Completion } from '../shared/commands.ts'
 import { caret, edit, layout, normalizeKey, offsetAt, type Editor } from '../shared/editor.ts'
 import { activityFrame } from '../shared/activity.ts'
 
@@ -107,11 +107,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
   }
   instance.send = () => {
     const state = instance.state
-    if (
-      !state.text.trim() ||
-      state.pending ||
-      (instance.props.busy && !/^\/(stop|close)\s*$/.test(state.text))
-    )
+    if (!state.text.trim() || state.pending || (instance.props.busy && !worksWhileBusy(state.text)))
       return
     state.seq++
     state.pending = {

@@ -690,6 +690,19 @@ test("when main's prompt refuses the last reply, /insert says why", async () => 
   expect(h.prompt()).toBe('')
 })
 
+test('the pane runs its own commands in any case or with extra words, never sending them to Claude', async () => {
+  const h = await harness({ messages: [{ id: 'a', role: 'assistant', text: 'Done.' }] })
+  await h.command()
+  await h.submit('first', 1, '/Refresh')
+  await Bun.sleep(0)
+  expect(h.starts()).toBe(2)
+  await h.submit('first', 2, '/COPY')
+  expect(h.copies).toEqual(['Done.'])
+  await h.submit('first', 3, '/close now')
+  expect(h.hidden()).toBe(true)
+  expect(h.requests.some((r) => r.path === '/send')).toBe(false)
+})
+
 test('main replies since the fork show a quiet hint, and /refresh re-forks in place', async () => {
   const messages: ChatState['messages'] = [
     { id: 'q', role: 'user', text: 'Why?' },

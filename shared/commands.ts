@@ -40,6 +40,10 @@ export function parseCommand(text: string) {
   return match ? { name: match[1].toLowerCase(), args: (match[2] ?? '').trim() } : undefined
 }
 
+/** Whether text is a side command that acts on the reply in progress, so it goes while Claude works. */
+export const worksWhileBusy = (text: string) =>
+  ['stop', 'close'].includes(parseCommand(text)?.name ?? '')
+
 function effortHint(level: string, levels: string[]) {
   if (level === 'auto') return 'Model default'
   if (level === levels[0]) return 'Fastest'
