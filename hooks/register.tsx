@@ -12,6 +12,8 @@ import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 
 const PANE = 'side'
+// The open side chat's helper, which a hot reload of this module would otherwise lose.
+const CONNECTION = { plugin: 'cc-side', key: 'connection' } as const
 // The narrowest terminal that fits both conversations side by side.
 const MIN_COLUMNS = 110
 const paneColumns = (columns: number) => Math.max(45, Math.floor(columns * 0.44))
@@ -61,6 +63,9 @@ export const register: Register = (on) => {
       saveEditing: async (canEdit) => {
         await $.store.set('canEdit', canEdit)
       },
+      saveConnection: async (endpoint) => {
+        await $.state.set(CONNECTION, endpoint)
+      },
     }
     chat.tracePath = (await $.env.get('CC_SIDE_TRACE')) ?? undefined
     await $.command.register({
@@ -75,6 +80,10 @@ export const register: Register = (on) => {
       model: await $.session.model(),
       version: await claudeVersion($),
     })
+    // After a hot reload the pane and its helper are still up; only this module forgot them.
+    const { value: connection } = await $.state.get(CONNECTION)
+    if (connection && (await $.ui.panes()).some((pane) => pane.id === PANE))
+      await chat.resume(connection)
     return result
   })
   on('command.run', { command: 'side' }, async ($, e) => {

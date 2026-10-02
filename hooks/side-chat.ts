@@ -38,6 +38,8 @@ type Host = {
   closePane: () => Promise<void>
   readEditing: () => Promise<boolean>
   saveEditing: (canEdit: boolean) => Promise<void>
+  // Held by Claude across hot reloads of this module, which forget the helper otherwise.
+  saveConnection: (endpoint: Endpoint | null) => Promise<void>
   // Hand text to the main chat, each resolving to why main refused it, or undefined once taken.
   insertInMain: (text: string) => Promise<string | undefined>
   shareWithMain: (note: string) => Promise<string | undefined>
@@ -271,7 +273,7 @@ export class SideChat {
         await this.host.request(started, '/close')
         return
       }
-      this.endpoint = started
+      this.setEndpoint(started)
       this.trace('side.opened', { pid: started.pid, placement: 'right' })
       void this.poll(connection)
     } catch (error) {
@@ -285,6 +287,18 @@ export class SideChat {
     }
   }
 
+  /** Reconnects the pane to a helper that outlived a hot reload of this module. */
+  async resume(endpoint: Endpoint) {
+    if (this.opened) return
+    this.opened = true
+    this.generation++
+    const connection = ++this.connection
+    this.endpoint = endpoint
+    this.savedEditing = await this.host.readEditing()
+    this.trace('side.resumed', { pid: endpoint.pid })
+    void this.poll(connection)
+  }
+
   async close() {
     if (!this.opened && !this.endpoint && !this.connecting) return
     const old = this.endpoint
@@ -293,7 +307,7 @@ export class SideChat {
     this.opened = false
     this.mainAhead = 0
     this.refreshing = false
-    this.endpoint = undefined
+    this.setEndpoint(undefined)
     this.state = empty()
     this.draft = ''
     this.answers = {}
@@ -313,6 +327,11 @@ export class SideChat {
       }
     }
     this.trace('side.closed', {})
+  }
+
+  private setEndpoint(endpoint: Endpoint | undefined) {
+    this.endpoint = endpoint
+    void this.host.saveConnection(endpoint ?? null).catch(() => {})
   }
 
   // Sending, or the helper is answering or waiting on an approval.
@@ -495,7 +514,7 @@ export class SideChat {
         await this.host.request(started, '/close')
         return false
       }
-      this.endpoint = started
+      this.setEndpoint(started)
       this.mainAhead -= counted
       this.state = { ...this.state, revision: -1 }
       const connection = ++this.connection

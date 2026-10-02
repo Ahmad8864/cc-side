@@ -27,7 +27,8 @@ bun run dev         # run the source plugin
 - `bridge/server.ts` and `start.ts`: local authenticated HTTP and process lifetime.
 - `bridge/platform.ts`: what differs by operating system: finding main's Claude and ending processes.
 - `shared/`: protocol types, commands, model labels, and pure text/layout operations.
-- `types/`: generated Mods declarations; see its upstream note before updating.
+- `types/`: Claude's generated Mods declarations (see its upstream note before updating),
+  and `cc-side.d.ts`, the contract declaring the session state kept across hot reloads.
 
 The SDK runs the main session's Claude binary; it is not bundled with the plugin.
 It forks a saved message with persistence disabled. Tools execute through Claude's

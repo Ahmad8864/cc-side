@@ -7,5 +7,6 @@
   },
   "keywords": ["side-chat", "function-hooks"],
   "repository": "https://github.com/Ahmad8864/cc-side",
-  "license": "MIT"
+  "license": "MIT",
+  "types": "./types/cc-side.d.ts"
 }

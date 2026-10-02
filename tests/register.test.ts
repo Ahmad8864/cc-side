@@ -25,7 +25,10 @@ async function harness({
   ...selection
 }: Setup = {}) {
   const handlers = new Map<string, (...args: any[]) => any>()
-  register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
+  // Registering again replaces every hook with a fresh module, as a hot reload does.
+  const load = () =>
+    register(((name: string, ...args: any[]) => handlers.set(name, args.at(-1))) as any, {})
+  load()
   let starts = 0,
     hidden = false,
     failing: string | undefined,
@@ -47,6 +50,8 @@ async function harness({
   let state: ChatState
   let settings: Record<string, unknown> = {}
   const stored: Record<string, unknown> = {}
+  // Session state, which outlives a reload of the module.
+  const held = new Map<string, unknown>()
   const $ = {
     env: { get: async (key: string) => env[key] },
     session: {
@@ -134,6 +139,7 @@ async function harness({
       close: async () => {
         hidden = true
       },
+      panes: async () => (opens.length && !hidden ? [{ id: 'side', title: 'Side chat' }] : []),
       resolve: async () =>
         Object.fromEntries(
           ['Box', 'Text', 'Markdown', 'Code', 'Input', 'Button', 'Client'].map((name) => [
@@ -147,6 +153,13 @@ async function harness({
       get: async (key: string) => stored[key],
       set: async (key: string, value: unknown) => {
         stored[key] = value
+      },
+    },
+    state: {
+      get: async ({ key }: { key: string }) => ({ value: held.get(key), version: 0 }),
+      set: async ({ key }: { key: string }, value: unknown) => {
+        held.set(key, value)
+        return { isSet: true, version: 1 }
       },
     },
     fs: { write: async () => {} },
@@ -166,7 +179,8 @@ async function harness({
     },
   }
   const invoke = (name: string, e: any) => handlers.get(name)!($, e, async () => ({}))
-  await invoke('session.start', { isInteractive: true, cwd: '/project' })
+  const start = () => invoke('session.start', { isInteractive: true, cwd: '/project' })
+  await start()
   const command = async (args = '') => {
     const result = await invoke('command.run', {
       args,
@@ -219,6 +233,10 @@ async function harness({
       prompt = text
     },
     stored,
+    reload: async () => {
+      load()
+      await start()
+    },
     starts: () => starts,
     hidden: () => hidden,
     failNext: (path = '/send') => {
@@ -311,6 +329,27 @@ test('native X, /close, and /side close all discard the side helper', async () =
   await h.command('close')
   expect(h.starts()).toBe(3)
   expect(h.requests.filter((r) => r.path === '/close')).toHaveLength(3)
+})
+
+test('after a hot reload the pane reconnects to its running helper and conversation', async () => {
+  const h = await harness({ messages: [{ id: 'q', role: 'user', text: 'Still here?' }] })
+  await h.command()
+  const before = h.requests.length
+  await h.reload()
+  await Bun.sleep(0)
+  expect(h.starts()).toBe(1)
+  expect(h.requests.slice(before).map((r) => r.url)).toContain('http://test/1/state')
+  expect(JSON.stringify(await h.render())).toContain('Still here?')
+})
+
+test('a closed side chat stays closed after a hot reload', async () => {
+  const h = await harness()
+  await h.command()
+  await h.command('close')
+  const before = h.requests.length
+  await h.reload()
+  await Bun.sleep(0)
+  expect(h.requests.slice(before)).toEqual([])
 })
 
 test('/clear in the main chat closes the side pane, and a later /side starts fresh', async () => {
