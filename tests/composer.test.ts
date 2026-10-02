@@ -159,6 +159,13 @@ test('Enter runs an exact slash command with optional arguments, while /model op
   expect(models.posts.at(-1).submit).toBeUndefined()
 })
 
+test('Enter completes a command with a required argument and waits for it', () => {
+  const h = harness('/sen')
+  h.key({ key: 'return' })
+  expect(h.posts.at(-1).text).toBe('/send ')
+  expect(h.posts.at(-1).submit).toBeUndefined()
+})
+
 test('the /effort menu marks the current level and lines up its descriptions', () => {
   expect(menuRows(harness('/effort ').render())).toEqual([
     '› low    ',

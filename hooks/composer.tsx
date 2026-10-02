@@ -150,7 +150,7 @@ const Composer: ClientModule<ComposerProps, State> = (props, surface) => {
       const selected = shown[state.selected % shown.length]
       if (selected) {
         choose(selected, false)
-        if (!/^\/(model|effort|edit) $/.test(selected.value)) instance.send()
+        if (!selected.awaitsArgument) instance.send()
       } else instance.send()
       return
     }

@@ -6,8 +6,9 @@ import type {
   StartOptions,
   Submission,
 } from '../shared/protocol.ts'
-import { localCommands } from '../shared/commands.ts'
+import { localCommands, parseCommand } from '../shared/commands.ts'
 import { errorMessage } from '../shared/errors.ts'
+import { lastExchange, sharedNote } from '../shared/handoff.ts'
 import { effortLevels } from '../shared/models.ts'
 import type { ComposerProps } from './composer.tsx'
 import type { PaneActions, PaneView } from './pane.tsx'
@@ -15,6 +16,13 @@ import type { Answers } from './permissions.tsx'
 
 export type BridgePath = '/state' | '/send' | '/permission' | '/edit' | '/stop' | '/close'
 export type StartChoices = Partial<Pick<StartOptions, 'model' | 'effort' | 'canEdit' | 'carried'>>
+
+// Side commands the host runs: they reach the main chat or the clipboard, which the side's
+// Claude cannot.
+const hostCommands = ['insert', 'share', 'send', 'copy'] as const
+type HostCommand = (typeof hostCommands)[number]
+const isHostCommand = (name: string): name is HostCommand =>
+  (hostCommands as readonly string[]).includes(name)
 
 /** What the side chat needs from Claude. The hook module provides it, since only it may use `$`. */
 type Host = {
@@ -30,7 +38,10 @@ type Host = {
   closePane: () => Promise<void>
   readEditing: () => Promise<boolean>
   saveEditing: (canEdit: boolean) => Promise<void>
-  insertInMain: (text: string) => Promise<boolean>
+  // Hand text to the main chat, each resolving to why main refused it, or undefined once taken.
+  insertInMain: (text: string) => Promise<string | undefined>
+  shareWithMain: (note: string) => Promise<string | undefined>
+  sendToMain: (text: string) => Promise<string | undefined>
   copy: (text: string) => Promise<boolean>
 }
 
@@ -386,7 +397,9 @@ export class SideChat {
     }
     if (trimmed === '/stop') return this.action('/stop')
     if (!trimmed || this.busy() || this.refreshing || !this.endpoint) return false
-    if (trimmed === '/insert' || trimmed === '/copy') return this.shareReply(trimmed)
+    const command = parseCommand(trimmed)
+    if (command && isHostCommand(command.name))
+      return this.runHostCommand(command.name, command.args)
     if (trimmed === '/refresh') {
       void this.refresh()
       return true
@@ -418,22 +431,41 @@ export class SideChat {
     }
   }
 
-  // The host, not the side's Claude, reaches the main prompt and the clipboard.
-  private async shareReply(command: string) {
-    const reply = this.state.messages.findLast((message) => message.role === 'assistant')
-    if (!reply?.text) this.notify('There is no reply to share yet.')
-    else if (command === '/insert')
-      this.notify(
-        (await this.host.insertInMain(reply.text))
-          ? 'Inserted the last reply in the main prompt. Esc switches to it.'
-          : 'The main prompt is not available right now.',
-      )
-    else
-      this.notify(
-        (await this.host.copy(reply.text)) ? 'Copied the last reply.' : 'Could not copy the reply.',
-      )
+  private async runHostCommand(name: HostCommand, args: string) {
     this.draft = ''
+    try {
+      this.notify(await this.hostCommandOutcome(name, args))
+    } catch (error) {
+      this.localError = errorMessage(error)
+      this.host.invalidate()
+    }
     return true
+  }
+
+  // What the person reads once a host command has run.
+  private async hostCommandOutcome(name: HostCommand, args: string): Promise<string> {
+    if (name === 'send') {
+      if (!args) return 'Type the message after /send.'
+      return (await this.host.sendToMain(args)) ?? 'Sent to the main chat. Esc switches to it.'
+    }
+    const exchange = lastExchange(this.state.messages)
+    if (!exchange) return 'There is no reply to share yet.'
+    switch (name) {
+      case 'insert':
+        return (
+          (await this.host.insertInMain(exchange.reply)) ??
+          'Inserted the last reply in the main prompt. Esc switches to it.'
+        )
+      case 'share':
+        return (
+          (await this.host.shareWithMain(sharedNote(exchange))) ??
+          'Shared the last reply with the main chat; Claude there reads it with your next message.'
+        )
+      case 'copy':
+        return (await this.host.copy(exchange.reply))
+          ? 'Copied the last reply.'
+          : 'Could not copy the reply.'
+    }
   }
 
   // Re-fork at main's latest point, keeping this discussion, the composer, and the side's
