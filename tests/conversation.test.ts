@@ -598,6 +598,11 @@ test('model and effort controls update only this process; unknown commands never
   expect(h.model()).toBe('sonnet')
   expect(h.chat.state.model).toBe('claude-sonnet-5')
   expect(h.chat.state.notice).toBeUndefined()
+  // A model picked by its display name keeps its id, which a refresh starts the next side with.
+  await h.chat.submit('/model Haiku 4.5')
+  expect(h.model()).toBe('haiku')
+  expect(h.chat.state.model).toBe('haiku')
+  await h.chat.submit('/model sonnet')
   await h.chat.submit('/effort low')
   expect(h.settings()).toEqual({ effortLevel: 'low' })
   expect(h.chat.state.effort).toBe('low')

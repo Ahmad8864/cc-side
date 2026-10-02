@@ -239,7 +239,7 @@ export class Conversation {
     )
     // Also accept provider model IDs, as the native CLI does.
     await this.agent.setModel(chosen?.value ?? name)
-    this.state.model = chosen?.resolvedModel ?? name
+    this.state.model = chosen ? (chosen.resolvedModel ?? chosen.value) : name
     this.state.notice = undefined
     this.changed()
   }
