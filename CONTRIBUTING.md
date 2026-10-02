@@ -16,7 +16,8 @@ bun run dev         # run the source plugin
 ## Code layout
 
 - `hooks/register.tsx`: the hooks, the engine calls behind `Host`, and the bridge client.
-- `hooks/side-chat.ts`: the side chat's helper lifecycle, polling, and send acknowledgements.
+- `hooks/side-chat.ts`: the side chat's helper lifecycle, polling, send acknowledgements, and
+  the commands the pane runs itself (`/insert`, `/copy`, `/refresh`, `/stop`, `/close`).
 - `hooks/pane.tsx`: the pane's layout: header, transcript, notices, and the composer's place.
 - `hooks/transcript.tsx`: messages and tool rows.
 - `hooks/permissions.tsx`: approvals and Claude's questions.
