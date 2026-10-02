@@ -70,6 +70,9 @@ sends, follow-ups, activity, and closing/reopening. Test artifacts stay in ignor
 `work/`. `CC_SIDE_TRACE` records conversation contents; use it only with synthetic
 inputs. Captures render recorded terminal cells, not native window screenshots.
 
+`/side stats` totals the side's prompt-cache reads and writes, to check that a side chat
+reuses main's cache; with `CC_SIDE_TRACE` set, it also records a full snapshot.
+
 ## Releases
 
 Bump `version` in `package.json` and `.claude-plugin/plugin.json`, then run
