@@ -55,7 +55,7 @@ its automatic sizing.
   while its model and effort match main's: a measured fork on Sonnet read 51,774
   cached tokens and wrote 336. With another model or effort, the side writes its
   context once more. Opening a pane alone makes no model request. `/side stats`
-  shows per-request cache usage.
+  totals the side's cache reads and writes.
 - The chats share a working directory: file changes survive closing the side.
   The child transcript is not resumable, but tool files and configured logging
   can persist.

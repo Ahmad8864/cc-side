@@ -63,7 +63,7 @@ export const register: Register = (on) => {
     await $.command.register({
       name: 'side',
       description: 'Open an independent chat beside this conversation',
-      argumentHint: '[question] | close | stats',
+      argumentHint: '[question] | close',
       immediate: true,
     })
     chat.trace('session.start', {
@@ -84,12 +84,14 @@ export const register: Register = (on) => {
       await chat.host.closePane()
       return {}
     }
+    // A diagnostic, left out of the hint: cache totals, and a full snapshot when tracing.
     if (arg === 'stats') {
-      chat.trace('snapshot', {
-        state: chat.state,
-        parent: await $.session.messages(),
-        tools: (await $.tool.list()).map((t) => t.name),
-      })
+      if (chat.tracePath)
+        chat.trace('snapshot', {
+          state: chat.state,
+          parent: await $.session.messages(),
+          tools: (await $.tool.list()).map((t) => t.name),
+        })
       await chat.flushed()
       return { text: chat.stats() }
     }

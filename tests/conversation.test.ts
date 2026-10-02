@@ -613,6 +613,16 @@ test('model and effort controls update only this process; unknown commands never
   h.chat.close()
 })
 
+test("/help lists the side's own commands and points to Claude Code's", async () => {
+  const h = harness()
+  await h.chat.submit('/help')
+  const help = h.chat.state.messages.at(-1)!.text
+  expect(help).toContain('**/insert**')
+  expect(help).not.toContain('**/compact**')
+  expect(help).toContain('type / to browse them')
+  h.chat.close()
+})
+
 test('the side starts at the main session effort, or auto when it is unknown', () => {
   const inherited = harness({ effort: 'xhigh' })
   expect(inherited.options.effort).toBe('xhigh')

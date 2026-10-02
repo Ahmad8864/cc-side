@@ -18,7 +18,7 @@ import type {
   Usage,
 } from '../shared/protocol.ts'
 import { AsyncQueue } from './queue.ts'
-import { commandCatalog, parseCommand } from '../shared/commands.ts'
+import { commandCatalog, localCommands, parseCommand } from '../shared/commands.ts'
 import { messageLimit } from '../shared/limits.ts'
 import { modelLabel, supportedEfforts } from '../shared/models.ts'
 import { toolOutput } from './tool-output.ts'
@@ -273,9 +273,10 @@ export class Conversation {
   private showHelp() {
     this.local(
       '**Side chat**\n\nClick the composer to type. Enter sends; Shift+Enter or Alt+Enter adds a newline. Tab completes a command; ↑/↓ selects a suggestion or moves through your draft. Esc returns to main.\n\nSide chats start read-only. /edit on lets Claude change files, and new side chats keep your last choice.\n\n' +
-        this.state
-          .commands!.map((c) => `- **/${c.name}** ${c.argumentHint} — ${c.description}`)
-          .join('\n'),
+        localCommands
+          .map((c) => `- **/${c.name}** ${c.argumentHint} — ${c.description}`)
+          .join('\n') +
+        "\n\nClaude Code's own commands and your skills work here too; type / to browse them.",
     )
   }
 

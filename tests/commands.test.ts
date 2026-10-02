@@ -44,6 +44,25 @@ test('commands keep arguments intact and discover runtime skills plus side contr
   expect(completions('text /model', commands, { models: [] })).toEqual([])
 })
 
+test("the side leaves out Claude Code's commands that cannot work in it, but not skills", () => {
+  const names = commandCatalog([
+    { name: '__remote-workflow', description: 'Internal', argumentHint: '', builtin: true },
+    { name: 'rename', description: 'Rename the session', argumentHint: '', builtin: true },
+    { name: 'color', description: 'My own skill', argumentHint: '' },
+    { name: 'constructor', description: 'A skill named like an object key', argumentHint: '' },
+    { name: 'compact', description: 'Summarize', argumentHint: '', builtin: true },
+  ]).map((c) => c.name)
+  expect(names).not.toContain('__remote-workflow')
+  expect(names).not.toContain('rename')
+  expect(names).toEqual(expect.arrayContaining(['color', 'constructor', 'compact']))
+  const clear = (builtin: boolean) =>
+    commandCatalog([
+      { name: 'clear', description: 'Resumable with /resume', argumentHint: '', builtin },
+    ]).find((c) => c.name === 'clear')!.description
+  expect(clear(true)).toContain('Start this side chat over')
+  expect(clear(false)).toBe('Resumable with /resume')
+})
+
 test('model and effort pickers handle mixed-case command names without switching commands', () => {
   const haiku = [
     {

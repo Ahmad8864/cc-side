@@ -25,11 +25,33 @@ export const localCommands: SideCommand[] = [
   { name: 'close', description: 'Close and discard this side chat', argumentHint: '' },
 ]
 
-export function commandCatalog(commands: SideCommand[]): SideCommand[] {
+// Claude Code's own commands with nothing to act on in a side chat, which is never saved and
+// has no prompt bar or views of its own. Its internal commands start with `__`.
+const unavailableBuiltins = new Set([
+  'rename',
+  'color',
+  'focus',
+  'heapdump',
+  'workflow-launch-exec',
+])
+// Claude Code's own commands that work differently in a side chat.
+const sideDescriptions = new Map([['clear', "Start this side chat over, without main's context"]])
+
+// A command as the Agent SDK reports it: built into Claude Code, or a skill.
+type ClaudeCommand = SideCommand & { builtin?: boolean }
+
+/** The side's commands, then Claude Code's commands and skills that work in a side chat. */
+export function commandCatalog(commands: readonly ClaudeCommand[]): SideCommand[] {
   const reserved = new Set(localCommands.map((c) => c.name))
-  return [...localCommands, ...commands.filter((c) => !reserved.has(c.name))].map((c) => ({
+  const offered = commands.filter(
+    (c) =>
+      !reserved.has(c.name) &&
+      !(c.builtin && (c.name.startsWith('__') || unavailableBuiltins.has(c.name))),
+  )
+  const listed: ClaudeCommand[] = [...localCommands, ...offered]
+  return listed.map((c) => ({
     name: c.name,
-    description: c.description.slice(0, 180),
+    description: ((c.builtin && sideDescriptions.get(c.name)) || c.description).slice(0, 180),
     argumentHint: c.argumentHint,
     ...(c.aliases ? { aliases: c.aliases } : {}),
   }))
