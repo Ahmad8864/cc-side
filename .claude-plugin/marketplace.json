@@ -12,8 +12,8 @@
       "description": "A separate agent conversation in Claude Code's right-hand pane, forked from the current context.",
       "source": {
         "source": "archive",
-        "url": "https://github.com/Ahmad8864/cc-side/releases/download/cc-side--v0.3.0/cc-side-0.3.0.zip",
-        "sha256": "f5483254c8e15c2f97711db9ec943c0e112c5ffc65e69e465cc73259d2255ae4"
+        "url": "https://github.com/Ahmad8864/cc-side/releases/download/cc-side--v0.4.0/cc-side-0.4.0.zip",
+        "sha256": "5ad280906e56613ac5094431affa41a6d172184de0753a37e622339d7ba8f1bd"
       }
     }
   ]
