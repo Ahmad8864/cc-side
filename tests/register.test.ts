@@ -47,6 +47,7 @@ async function harness({
   const refusals: { fill?: string; submit?: string; append?: string } = {}
   let prompt = ''
   let startup: string | undefined
+  let startupErrors = ''
   let state: ChatState
   let settings: Record<string, unknown> = {}
   const stored: Record<string, unknown> = {}
@@ -77,7 +78,7 @@ async function harness({
         launches.push(command)
         launchOptions.push(JSON.parse(options.stdin))
         starts++
-        if (startup !== undefined) return { exitCode: 1, stdout: startup }
+        if (startup !== undefined) return { exitCode: 1, stdout: startup, stderr: startupErrors }
         state = {
           revision: 1,
           status,
@@ -245,8 +246,9 @@ async function harness({
     failPolls: (count: number) => {
       failedPolls = count
     },
-    failStart: (stdout?: string) => {
+    failStart: (stdout?: string, stderr = '') => {
       startup = stdout
+      startupErrors = stderr
     },
   }
 }
@@ -790,15 +792,20 @@ test('a stale Retry pressed after the side chat connects keeps that connection',
   expect(h.starts()).toBe(2)
 })
 
-test('helper startup errors are shown, with a reinstall hint only for unreadable output', async () => {
+test('helper startup errors are shown, and a crashed helper names its cause', async () => {
   const h = await harness()
   h.failStart(JSON.stringify({ error: 'Claude Code was not found.' }))
   await h.command()
   const tree = await h.render()
   expect(JSON.stringify(tree)).toContain('Claude Code was not found.')
-  h.failStart('Segmentation fault')
+  h.failStart(
+    '',
+    'file:///plugin/helper.mjs:42\n\nReferenceError: crypto is not defined\n\nNode.js v18.20.8\n',
+  )
   await tree.find((n) => n.props.key === 'retry-side')!.props.onPress()
-  expect(JSON.stringify(await h.render())).toContain('Reinstall cc-side')
+  const crash = JSON.stringify(await h.render())
+  expect(crash).toContain('Could not start the side helper: ReferenceError: crypto is not defined.')
+  expect(crash).toContain('Reinstall cc-side')
 })
 
 test('the helper runs on Node, or on Bun without a recent Node; CC_SIDE_BUN runs the source', async () => {

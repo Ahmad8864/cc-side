@@ -1,4 +1,4 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, ProcessRunResult, Register } from 'claude-code'
 import type {
   ChatState,
   Endpoint,
@@ -7,6 +7,7 @@ import type {
   StartupResult,
 } from '../shared/protocol.ts'
 import { isSupportedClaude, oldestSupportedClaude } from '../shared/claude-version.ts'
+import { errorMessage } from '../shared/errors.ts'
 import { effortLevels } from '../shared/models.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
@@ -256,17 +257,21 @@ function createBridgeClient($: EngineInterface) {
 
     async start(options: StartOptions): Promise<Endpoint> {
       helper ??= await helperCommand($)
+      const failed = (cause: string) =>
+        new Error(
+          `Could not start the side helper: ${cause.replace(/\.$/, '')}. Reinstall cc-side, or check the development setup if running from source.`,
+        )
+      let output: ProcessRunResult
+      try {
+        output = await $.process.run(helper, { stdin: JSON.stringify(options), timeoutMs: 15000 })
+      } catch (error) {
+        throw failed(errorMessage(error))
+      }
       let startup: StartupResult
       try {
-        const result = await $.process.run(helper, {
-          stdin: JSON.stringify(options),
-          timeoutMs: 15000,
-        })
-        startup = JSON.parse(result.stdout)
+        startup = JSON.parse(output.stdout)
       } catch {
-        throw new Error(
-          'Could not start the side helper. Reinstall cc-side, or check the development setup if running from source.',
-        )
+        throw failed(crashCause(output.stderr))
       }
       if ('error' in startup) throw new Error(startup.error)
       return startup
@@ -293,6 +298,17 @@ function createBridgeClient($: EngineInterface) {
       return JSON.parse(response.text)
     },
   }
+}
+
+// What a crashed runtime said went wrong: the first line naming an error, since Node ends
+// its report with its version.
+function crashCause(stderr: string) {
+  const lines = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const cause = lines.find((line) => /error/i.test(line)) ?? lines[0] ?? 'it exited without a reply'
+  return cause.slice(0, 300)
 }
 
 // The runtimes that run the helper, in the order tried, with the oldest major of each.
