@@ -4,7 +4,7 @@ A temporary side chat for Claude Code. Run `/side` to open a second conversation
 on the right, with the main chat's context and its own tools, model, and follow-ups.
 Closing it discards the conversation.
 
-https://github.com/user-attachments/assets/3d79f8cc-e0b9-488d-becf-f2fd809dee71
+![CC-Side demo: inspect code in the side chat while the main agent works, then send a test request back.](docs/cc-side-demo.gif)
 
 ## Install
 
