@@ -179,15 +179,16 @@ test('while Claude works, only /stop and /close go, in any case', () => {
   }
 })
 
-test('an @ mention offers the matching paths once the host answers; Tab inserts one', () => {
+test('an @ mention offers the matching paths, narrowing the last answer until the next; Tab inserts one', () => {
   const h = harness('see @gu')
+  h.props.mention = { query: 'gu', paths: ['docs/guide.md', 'src/gum.ts'] }
   h.key({ key: 'i' })
   expect(h.posts.at(-1).mention).toBe('gui')
-  expect(JSON.stringify(h.render())).not.toContain('+ docs/guide.md')
-  h.props.mention = { query: 'gu', paths: ['docs/guide.md'] }
-  expect(JSON.stringify(h.render())).not.toContain('+ docs/guide.md')
+  const narrowed = JSON.stringify(h.render())
+  expect(narrowed).toContain('+ docs/guide.md')
+  expect(narrowed).not.toContain('+ src/gum.ts')
   h.props.mention = { query: 'gui', paths: ['docs/guide.md', 'my notes/'] }
-  expect(JSON.stringify(h.render())).toContain('+ docs/guide.md')
+  expect(JSON.stringify(h.render())).toContain('+ my notes/')
   h.key({ key: 'tab' })
   expect(h.posts.at(-1)).toMatchObject({ text: 'see @docs/guide.md ' })
   expect(h.posts.at(-1).mention).toBeUndefined()

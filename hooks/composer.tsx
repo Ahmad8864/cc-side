@@ -3,7 +3,7 @@ import type { Activity, Receipt, SideCommand, SideModel, Submission } from '../s
 import { completions, worksWhileBusy, type Completion } from '../shared/commands.ts'
 import { caret, edit, layout, normalizeKey, offsetAt, type Editor } from '../shared/editor.ts'
 import { activityFrame } from '../shared/activity.ts'
-import { mentionAt, mentionText } from '../shared/mentions.ts'
+import { mentionAt, mentionText, rankPaths } from '../shared/mentions.ts'
 
 export type ComposerProps = {
   epoch: number
@@ -36,13 +36,15 @@ type State = Editor & {
 }
 type IO = { state: State; props: ComposerProps; menu: Completion[]; send: () => void }
 const instances = new WeakMap<object, IO>()
-// The paths matching the `@` mention at the caret once the host has answered for it, or the
-// commands matching a slash command.
+// The paths matching the `@` mention at the caret, or the commands matching a slash command.
 function menuFor({ text, cursor }: Editor, props: ComposerProps): Completion[] {
   const typed = mentionAt(text, cursor)
   if (!typed) return completions(text, props.commands, props)
-  if (props.mention?.query !== typed.query) return []
-  return props.mention.paths.map((path) => ({
+  // Until the host answers for what is typed now, narrow its last answer so the menu stays put.
+  const answer = props.mention
+  const paths =
+    answer?.query === typed.query ? answer.paths : rankPaths(answer?.paths ?? [], typed.query)
+  return paths.map((path) => ({
     value: mentionText(path),
     label: `+ ${path}`,
     description: '',
