@@ -8,6 +8,7 @@
     "test": "bun test",
     "typecheck": "tsc -p .",
     "types:check": "bun scripts/check-mod-types.ts",
+    "types:update": "bun scripts/update-mod-types.ts",
     "validate": "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin validate .claude-plugin/plugin.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

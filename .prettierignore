@@ -4,3 +4,5 @@ dist/
 licenses/
 types/claude-code.d.ts
 bun.lock
+# Written by Claude Code when it loads this plugin from source.
+.claude-plugin/types/
