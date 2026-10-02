@@ -8,23 +8,19 @@ Closing it discards the conversation.
 
 ## Install
 
-Requires Claude Code and Node.js 18 or later (or Bun) on your PATH, on macOS,
-Linux, or Windows. The side chat's helper runs on whichever it finds first.
+Requires Claude Code 2.1.287 or later and Node.js 18 or later (or Bun) on your
+PATH, on macOS, Linux, or Windows. The side chat's helper runs on whichever it
+finds first.
 
 ```sh
 claude plugin marketplace add Ahmad8864/cc-side
 claude plugin install cc-side@cc-side
 ```
 
-Mods currently require experimental function hooks and fullscreen rendering.
-Restart Claude with both enabled:
-
-```sh
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 CLAUDE_CODE_NO_FLICKER=1 claude
-```
-
-Use a terminal at least 110 columns wide. Tested with Claude Code **2.1.280**;
-Mods APIs can change between releases.
+The side chat draws in Claude's fullscreen renderer, in a terminal at least 110
+columns wide. Turn fullscreen on once with `/tui fullscreen`; Claude keeps it for
+later sessions. Tested with Claude Code **2.1.287**; Mods APIs can change between
+releases.
 
 ## Usage
 

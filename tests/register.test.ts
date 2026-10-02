@@ -7,6 +7,8 @@ type Setup = Partial<
   Pick<ChatState, 'status' | 'permissions' | 'messages' | 'model' | 'effort' | 'models'>
 > & {
   env?: Record<string, string>
+  // The engine's version; null for an engine too old to report one.
+  claudeVersion?: string | null
   // What each runtime on PATH prints for `--version`.
   runtimes?: Record<string, string>
 }
@@ -18,6 +20,7 @@ async function harness({
   permissions = [],
   messages = [],
   env = {},
+  claudeVersion = '2.1.287',
   runtimes = { node: 'v22.12.0' },
   ...selection
 }: Setup = {}) {
@@ -47,6 +50,7 @@ async function harness({
       cwd: async () => '/project',
       model: async () => 'sonnet',
       messages: async () => [],
+      ...(claudeVersion === null ? {} : { version: async () => ({ version: claudeVersion }) }),
     },
     plugin: { root: '/plugin' },
     settings: { read: async () => settings },
@@ -341,6 +345,28 @@ test('a command request failure restores its argument for retry', async () => {
   const result = await h.command('Retry this question')
   expect(h.prompt()).toBe('/side Retry this question')
   expect(result.text).toContain('Temporary failure')
+})
+
+test('/side asks for a Claude Code update instead of opening on an older engine', async () => {
+  for (const [claudeVersion, said] of [
+    ['2.1.284', 'this is 2.1.284'],
+    [null, 'needs Claude Code 2.1.287 or later.'],
+  ] as const) {
+    const h = await harness({ claudeVersion })
+    expect((await h.command()).text).toContain(said)
+    expect(h.opens).toEqual([])
+    expect(h.starts()).toBe(0)
+  }
+})
+
+test('/side says what the terminal lacks instead of opening', async () => {
+  const h = await harness()
+  const open = (presentation: { isFullscreen: boolean; columns: number }) =>
+    h.invoke('command.run', { args: '', presentation })
+  expect((await open({ isFullscreen: false, columns: 180 })).text).toContain('/tui fullscreen')
+  expect((await open({ isFullscreen: true, columns: 100 })).text).toContain('this one is 100')
+  expect(h.opens).toEqual([])
+  expect(h.starts()).toBe(0)
 })
 
 test('terminal resize updates the existing pane once, without focus or conversation reset', async () => {

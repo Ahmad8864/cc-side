@@ -6,11 +6,14 @@ import type {
   StartOptions,
   StartupResult,
 } from '../shared/protocol.ts'
+import { isSupportedClaude, oldestSupportedClaude } from '../shared/claude-version.ts'
 import { effortLevels } from '../shared/models.ts'
 import { renderPane } from './pane.tsx'
 import { SideChat, type BridgePath, type StartChoices } from './side-chat.ts'
 
 const PANE = 'side'
+// The narrowest terminal that fits both conversations side by side.
+const MIN_COLUMNS = 110
 const paneColumns = (columns: number) => Math.max(45, Math.floor(columns * 0.44))
 
 export const register: Register = (on) => {
@@ -61,6 +64,7 @@ export const register: Register = (on) => {
       id: await $.session.id(),
       cwd: e.cwd,
       model: await $.session.model(),
+      version: await claudeVersion($),
     })
     return result
   })
@@ -79,13 +83,24 @@ export const register: Register = (on) => {
       await chat.flushed()
       return { text: chat.stats() }
     }
-    if (!e.presentation.isFullscreen || e.presentation.columns < 110) {
+    const version = await claudeVersion($)
+    if (!version || !isSupportedClaude(version)) {
+      const running = version ? `; this is ${version}` : ''
       return {
-        text: 'Side chat needs fullscreen rendering and a terminal at least 110 columns wide. Enable fullscreen with /tui, then run /side.',
+        text: `cc-side needs Claude Code ${oldestSupportedClaude} or later${running}. Run claude update, then start a new session.`,
+      }
+    }
+    const { isFullscreen, columns } = e.presentation
+    if (!isFullscreen) {
+      return { text: 'Side chat needs the fullscreen renderer. Run /tui fullscreen, then /side.' }
+    }
+    if (columns < MIN_COLUMNS) {
+      return {
+        text: `Side chat needs a terminal at least ${MIN_COLUMNS} columns wide; this one is ${columns}. Widen it, then run /side.`,
       }
     }
     chat.opened = true
-    viewportColumns = e.presentation.columns
+    viewportColumns = columns
     await $.ui.open({
       id: PANE,
       title: 'Side chat',
@@ -120,7 +135,7 @@ export const register: Register = (on) => {
       e.viewport.columns + (e.props.placement === 'dock' ? e.props.bodyColumns + 1 : 0)
     if (terminalColumns && terminalColumns !== viewportColumns) {
       viewportColumns = terminalColumns
-      if (e.viewport?.isFullscreen && viewportColumns >= 110) {
+      if (e.viewport?.isFullscreen && viewportColumns >= MIN_COLUMNS) {
         // Updating this pane preserves its session and editor. Omit focus so a
         // window resize does not take the keyboard from either conversation.
         await $.ui.open({ id: PANE, title: 'Side chat', columns: paneColumns(viewportColumns) })
@@ -184,6 +199,15 @@ export const register: Register = (on) => {
     await chat.flushed()
     return next(e)
   })
+}
+
+// The engine's version; engines before 2.1.284 cannot say.
+async function claudeVersion($: EngineInterface) {
+  try {
+    return (await $.session.version()).version
+  } catch {
+    return undefined
+  }
 }
 
 // Mods requires engine calls to stay in the registered hook module.

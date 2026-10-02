@@ -14,7 +14,6 @@ const child = Bun.spawn([claude, '--plugin-dir', root, ...process.argv.slice(2)]
   env: {
     ...process.env,
     CC_SIDE_BUN: process.execPath,
-    CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '1',
     CLAUDE_CODE_NO_FLICKER: '1',
   },
 })

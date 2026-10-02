@@ -32,8 +32,8 @@ def serve(directory):
     listener.bind(sockpath)
     listener.listen(2)
     listener.settimeout(0.03)
-    env = {**os.environ, 'CLAUDE_CODE_ENABLE_FUNCTION_HOOKS': '1',
-           'CLAUDE_CODE_NO_FLICKER': '1', 'CC_SIDE_TRACE': str(directory / 'trace.json'),
+    env = {**os.environ, 'CLAUDE_CODE_NO_FLICKER': '1',
+           'CC_SIDE_TRACE': str(directory / 'trace.json'),
            'CC_SIDE_TEST': '1', 'TERM': 'xterm-256color', 'FORCE_COLOR': '1'}
     # Start a session of its own, even when run from inside another Claude session.
     for name in json.loads((ROOT / 'shared/session-env.json').read_text()):
