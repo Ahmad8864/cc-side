@@ -1,4 +1,4 @@
-`claude-code.d.ts` holds the Mods declarations Claude Code 2.1.287 wrote for a
+`claude-code.d.ts` holds the Mods declarations Claude Code 2.1.294 wrote for a
 plugin it loaded. Run `bun run types:update` after upgrading Claude Code.
 The update bot runs the same command against the latest published CLI and
 opens a PR with the generated declarations and check results.
